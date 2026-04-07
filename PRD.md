@@ -50,6 +50,10 @@ LLM for categorisation and tagging
 - Google Gemini 3.1 Flash live --> Generate genre, book length, reading difficulty and purpose  --> Remember to track token usage 
     - Make it an AI agent to search queries about book length, reading difficulty and purpose before making a decision. (Ensure that this is async)
 
+    LLM INPUT: text from best relevance query score, description answer text, difficulty tag, purpose tag, book length tag 
+    LLM OUTPUT: genre (standardised), tags
+    EMBEDDING INPUT: genre (standardised), description answer text
+
 - If error, send message that AI assistant has ran out of credits, need to wait for reload
 -  Gemini Embedding 2 --> Store embeddings and then use search to find books to recommend later on
     - Bible skills --> Dig deeper, preaching books
@@ -75,3 +79,6 @@ Database:
     - memories: Require a user to log in for the memories part
     - chatlogs: Track the chatlog between the user and the librarian bot
     - etulips: track what books have been bought from them before, prepare their descriptions and title, and their bought_status --> can port them over with their genre, tags and embeddings later on
+
+
+    
