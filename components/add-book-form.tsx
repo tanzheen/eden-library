@@ -15,13 +15,6 @@ interface CoverOption {
   title?: string;
 }
 
-interface PreparedBookMetadataInput {
-  prompt: string;
-  bookInfoAnswer: string;
-  difficultyAnswer: string;
-  searchContent: string;
-}
-
 interface AddBookFormProps {
   onBookAdded: () => void;
   userId: string | null;
@@ -35,8 +28,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [coverOptions, setCoverOptions] = useState<CoverOption[]>([]);
-  const [preparedMetadata, setPreparedMetadata] =
-    useState<PreparedBookMetadataInput | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     author: "",
@@ -63,7 +54,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
 
     setSearchingImage(true);
     setCoverOptions([]);
-    setPreparedMetadata(null);
 
     try {
       const response = await fetch(
@@ -76,8 +66,7 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
       }
 
       if (Array.isArray(data.images) && data.images.length > 0) {
-        setCoverOptions(data.images.slice(0, 4));
-        setPreparedMetadata(data.preparedMetadata || null);
+        setCoverOptions(data.images.slice(0, 6));
       } else {
         alert("No cover images found. You can enter a URL manually.");
       }
@@ -113,7 +102,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
         author: formData.author,
         cover_url: formData.cover_url || null,
         existingBookMetadata: existingBookMetadata,
-        preparedMetadata: existingBookMetadata ? null : preparedMetadata,
       }),
     });
 
@@ -140,7 +128,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
       cover_url: "",
     });
     setCoverOptions([]);
-    setPreparedMetadata(null);
     setExistingBookMetadata(null);
     setIsOpen(false);
     onBookAdded();
@@ -151,7 +138,7 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
     bookName: string,
     authorName: string
   ) => {
-    // Fire and forget - the API handles everything in the background
+    // Fire and forget - the API handles everything in the background including Tavily search
     fetch("/api/generate-book-metadata", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -159,7 +146,7 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
         bookName,
         authorName,
         bookId,
-        preparedMetadata,
+        preparedMetadata: null,
       }),
     }).catch((error) => {
       console.error("Error triggering book metadata generation:", error);
@@ -203,7 +190,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                 onChange={(value) => {
                   setFormData({ ...formData, title: value });
                   setCoverOptions([]);
-                  setPreparedMetadata(null);
                   setExistingBookMetadata(null); // Clear metadata when manually typing
                 }}
                 onSelect={(book) => {
@@ -215,7 +201,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                   });
                   setExistingBookMetadata(book); // Store full metadata
                   setCoverOptions([]);
-                  setPreparedMetadata(null);
                   if (book.cover_url) {
                     setImageLoading(true);
                     setImageError(false);
@@ -239,7 +224,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                 onChange={(e) => {
                   setFormData({ ...formData, author: e.target.value });
                   setCoverOptions([]);
-                  setPreparedMetadata(null);
                 }}
                 required
               />
@@ -255,7 +239,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                   onChange={(e) => {
                     setFormData({ ...formData, cover_url: e.target.value });
                     setCoverOptions([]);
-                    setPreparedMetadata(null);
                     if (e.target.value) {
                       setImageLoading(true);
                       setImageError(false);
@@ -286,7 +269,7 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                   <p className="mt-1 text-xs text-muted-foreground">
                     Click the image that matches the book you want to add.
                   </p>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="mt-3 grid grid-cols-3 gap-3">
                     {coverOptions.map((option) => {
                       const isSelected = formData.cover_url === option.imageUrl;
 
@@ -383,7 +366,6 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                         onClick={() => {
                           setFormData({ ...formData, cover_url: "" });
                           setCoverOptions([]);
-                          setPreparedMetadata(null);
                           setImageError(false);
                         }}
                         className="w-fit text-destructive hover:text-destructive"

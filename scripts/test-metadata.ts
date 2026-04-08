@@ -138,7 +138,7 @@ async function testMetadataGeneration(bookName: string, authorName: string, forc
   console.log("Prompt length:", prompt.length, "characters");
 
   // Step 3: Call Gemini
-  const metadataModel = "gemma-4-31b-it";
+  const metadataModel = "gemma-4-26b-a4b-it";
   console.log(`\n🤖 Step 3: Calling Gemini (${metadataModel})...\n`);
 
   const step3Start = Date.now();

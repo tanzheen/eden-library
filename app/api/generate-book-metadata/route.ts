@@ -17,7 +17,7 @@ import {
 } from "@/lib/book-metadata-prep";
 
 // Allow up to 60 seconds for background processing
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function toPgVectorLiteral(values: number[]) {
   return `[${values.join(",")}]`;
