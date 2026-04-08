@@ -9,6 +9,7 @@ interface BookDetailsModalProps {
   book: Book;
   userId?: string | null;
   copies?: Book[];
+  canReturn?: boolean;
   onClose: () => void;
   onBorrow: (bookId: number) => void;
   onReturn: (bookId: number) => void;
@@ -18,6 +19,7 @@ export function BookDetailsModal({
   book,
   userId,
   copies,
+  canReturn = false,
   onClose,
   onBorrow,
   onReturn,
@@ -176,15 +178,19 @@ export function BookDetailsModal({
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => onBorrow(book.id)}
               >
-                Borrow This Book
+                Request to Borrow
               </Button>
-            ) : (
+            ) : canReturn ? (
               <Button
                 variant="outline"
                 className="flex-1"
                 onClick={() => onReturn(book.id)}
               >
                 Return This Book
+              </Button>
+            ) : (
+              <Button variant="outline" className="flex-1" disabled>
+                Currently Borrowed
               </Button>
             )}
             <Button variant="outline" onClick={onClose}>

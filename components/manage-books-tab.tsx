@@ -1,73 +1,117 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { currentBorrowerColumnMissing, updateBookBorrowState } from "@/lib/book-borrowing";
 import { createClient } from "@/lib/supabase/client";
+import { approveOrder, returnOrder } from "@/lib/book-orders";
 import { Book } from "@/lib/types";
 import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
 import { BookDetailsModal } from "./book-details-modal";
 import { BookCoverImage } from "./book-cover-image";
 import { Button } from "./ui/button";
-import { Loader2, Trash2, User, BookOpen, Inbox } from "lucide-react";
+import { Loader2, Trash2, BookOpen, Inbox, Clock3 } from "lucide-react";
 
 interface ManageBooksTabProps {
   userId: string | null;
   userName: string | null;
 }
 
+interface OrderRecord {
+  id: number;
+  book_id: number;
+  owner_id: string;
+  borrower_id: string;
+  status: "requested" | "borrowed" | "returned" | "cancelled";
+  book?: Book;
+}
+
 export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
   const [ownedBooks, setOwnedBooks] = useState<Book[]>([]);
-  const [borrowedBooks, setBorrowedBooks] = useState<Book[]>([]);
+  const [requestedOrders, setRequestedOrders] = useState<OrderRecord[]>([]);
+  const [borrowedOutOrders, setBorrowedOutOrders] = useState<OrderRecord[]>([]);
+  const [borrowedByMeOrders, setBorrowedByMeOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingBookId, setDeletingBookId] = useState<number | null>(null);
+  const [actingOrderId, setActingOrderId] = useState<number | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
-  const [borrowerNamesAvailable, setBorrowerNamesAvailable] = useState(true);
 
   const supabase = createClient();
 
   const fetchBooks = useCallback(async () => {
-    if (!userId || !userName) {
+    if (!userId) {
       setOwnedBooks([]);
-      setBorrowedBooks([]);
+      setRequestedOrders([]);
+      setBorrowedOutOrders([]);
+      setBorrowedByMeOrders([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
 
-    const { data: owned, error: ownedError } = await supabase
-      .from("books")
-      .select("*")
-      .eq("owner_id", userId)
-      .order("created_at", { ascending: false });
+    const [{ data: owned, error: ownedError }, { data: ownerOrders, error: ownerOrdersError }, { data: borrowedByMe, error: borrowedByMeError }] =
+      await Promise.all([
+        supabase.from("books").select("*").eq("owner_id", userId).order("created_at", { ascending: false }),
+        supabase
+          .from("orders")
+          .select("id, book_id, owner_id, borrower_id, status, book:books(*)")
+          .eq("owner_id", userId)
+          .in("status", ["requested", "borrowed"])
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("orders")
+          .select("id, book_id, owner_id, borrower_id, status, book:books(*)")
+          .eq("borrower_id", userId)
+          .eq("status", "borrowed")
+          .order("borrowed_at", { ascending: false }),
+      ]);
 
     if (ownedError) {
       console.error("Failed to fetch owned books:", ownedError);
       setOwnedBooks([]);
     } else {
-      setOwnedBooks(await resolveBookCoverUrls(owned || []));
+      setOwnedBooks(await resolveBookCoverUrls((owned || []) as Book[]));
     }
 
-    const { data: borrowed, error: borrowedError } = await supabase
-      .from("books")
-      .select("*")
-      .eq("current_borrower_id", userId)
-      .neq("owner_id", userId)
-      .order("updated_at", { ascending: false });
-
-    if (currentBorrowerColumnMissing(borrowedError)) {
-      setBorrowerNamesAvailable(false);
-      setBorrowedBooks([]);
-    } else if (borrowedError) {
-      console.error("Failed to fetch borrowed books:", borrowedError);
-      setBorrowedBooks([]);
+    if (ownerOrdersError) {
+      console.error("Failed to fetch owner orders:", ownerOrdersError);
+      setRequestedOrders([]);
+      setBorrowedOutOrders([]);
     } else {
-      setBorrowerNamesAvailable(true);
-      setBorrowedBooks(await resolveBookCoverUrls(borrowed || []));
+      const resolvedOwnerOrders = await Promise.all(
+        ((ownerOrders || []) as OrderRecord[]).map(async (order) => ({
+          ...order,
+          book: order.book
+            ? (await resolveBookCoverUrls([order.book]))[0]
+            : undefined,
+        }))
+      );
+
+      setRequestedOrders(
+        resolvedOwnerOrders.filter((order) => order.status === "requested")
+      );
+      setBorrowedOutOrders(
+        resolvedOwnerOrders.filter((order) => order.status === "borrowed")
+      );
+    }
+
+    if (borrowedByMeError) {
+      console.error("Failed to fetch borrowed orders:", borrowedByMeError);
+      setBorrowedByMeOrders([]);
+    } else {
+      const resolvedBorrowedOrders = await Promise.all(
+        ((borrowedByMe || []) as OrderRecord[]).map(async (order) => ({
+          ...order,
+          book: order.book
+            ? (await resolveBookCoverUrls([order.book]))[0]
+            : undefined,
+        }))
+      );
+
+      setBorrowedByMeOrders(resolvedBorrowedOrders);
     }
 
     setLoading(false);
-  }, [supabase, userId, userName]);
+  }, [supabase, userId]);
 
   useEffect(() => {
     fetchBooks();
@@ -107,39 +151,31 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
     }
   };
 
-  const handleBorrow = async (bookId: number) => {
-    if (!userId || !userName) {
-      alert("Please sign in to borrow books");
+  const handleApproveOrder = async (orderId: number) => {
+    setActingOrderId(orderId);
+    const result = await approveOrder(orderId);
+    setActingOrderId(null);
+
+    if (!result.ok) {
+      alert(result.error);
       return;
     }
 
-    const { error } = await updateBookBorrowState(supabase, bookId, {
-      status: false,
-      currentBorrowerId: userId,
-    });
-
-    if (error) {
-      alert("Failed to borrow book: " + error.message);
-      return;
-    }
-
-    setSelectedBook(null);
     fetchBooks();
   };
 
-  const handleReturn = async (bookId: number) => {
-    const { error } = await updateBookBorrowState(supabase, bookId, {
-      status: true,
-      currentBorrowerId: null,
-    });
+  const handleReturnOrder = async (orderId: number) => {
+    setActingOrderId(orderId);
+    const result = await returnOrder(orderId);
+    setActingOrderId(null);
 
-    if (error) {
-      alert("Failed to return book: " + error.message);
+    if (!result.ok) {
+      alert(result.error);
       return;
     }
 
-    setSelectedBook(null);
     fetchBooks();
+    setSelectedBook(null);
   };
 
   if (!userId || !userName) {
@@ -162,11 +198,55 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
     <div className="space-y-10">
       <section className="space-y-4">
         <div className="flex items-center gap-2">
+          <Clock3 className="h-5 w-5 text-amber-500" />
+          <div>
+            <h2 className="text-xl font-bold">Pending Requests</h2>
+            <p className="text-sm text-muted-foreground">
+              Approve requests before the borrowing actually happens.
+            </p>
+          </div>
+        </div>
+
+        {requestedOrders.length === 0 ? (
+          <div className="rounded-xl border border-border bg-muted/30 p-8 text-center text-muted-foreground">
+            No pending requests right now.
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {requestedOrders.map((order) => (
+              <div
+                key={order.id}
+                className="rounded-xl border border-border bg-card p-4 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-foreground">
+                      {order.book?.title || "Unknown book"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Borrower ID: {order.borrower_id}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => handleApproveOrder(order.id)}
+                    disabled={actingOrderId === order.id}
+                  >
+                    {actingOrderId === order.id ? "Approving..." : "Approve"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-blue-600" />
           <div>
             <h2 className="text-xl font-bold">Your Books</h2>
             <p className="text-sm text-muted-foreground">
-              See who has borrowed your books and remove books that are back with you.
+              See what is available, borrowed out, or ready to remove.
             </p>
           </div>
         </div>
@@ -178,8 +258,10 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
         ) : (
           <div className="grid gap-4">
             {ownedBooks.map((book) => {
-              const isAvailable = book.status === true;
-              const isOwnedByViewer = book.owner_id === userId;
+              const activeBorrow = borrowedOutOrders.find(
+                (order) => order.book_id === book.id
+              );
+              const canDelete = book.status === true && !activeBorrow;
 
               return (
                 <div
@@ -202,62 +284,26 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
                       )}
                     </div>
 
-                    <div className="min-w-0 flex-1 space-y-3">
-                      <div className="space-y-1">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedBook(book)}
-                          className="text-left text-lg font-semibold text-foreground hover:text-blue-600"
-                        >
-                          {book.title}
-                        </button>
-                        <p className="text-sm text-muted-foreground">by {book.author}</p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${
-                            isOwnedByViewer
-                              ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                              : isAvailable
-                              ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                              : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                          }`}
-                        >
-                          {isOwnedByViewer
-                            ? "Owned"
-                            : isAvailable
-                              ? "Available with you"
-                              : "Currently borrowed"}
-                        </span>
-                        {book.difficulty && (
-                          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
-                            {book.difficulty}
-                          </span>
-                        )}
-                        {book.purpose && (
-                          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
-                            {book.purpose}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <User className="h-4 w-4" />
-                        <span>
-                          {isAvailable
-                            ? "No one is currently borrowing this book."
-                            : borrowerNamesAvailable
-                              ? `Borrowed by ${book.current_borrower || "someone"}`
-                              : "This book is currently marked as borrowed."}
-                        </span>
-                      </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBook(book)}
+                        className="text-left text-lg font-semibold text-foreground hover:text-blue-600"
+                      >
+                        {book.title}
+                      </button>
+                      <p className="text-sm text-muted-foreground">by {book.author}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {activeBorrow
+                          ? `Currently borrowed by user ${activeBorrow.borrower_id}`
+                          : "No one is currently borrowing this book."}
+                      </p>
                     </div>
 
                     <div className="flex shrink-0 items-start">
                       <Button
                         variant="outline"
-                        disabled={!isAvailable || deletingBookId === book.id}
+                        disabled={!canDelete || deletingBookId === book.id}
                         onClick={() => handleDeleteBook(book.id)}
                         className="gap-2"
                       >
@@ -283,30 +329,28 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
           <div>
             <h2 className="text-xl font-bold">Books You Borrowed</h2>
             <p className="text-sm text-muted-foreground">
-              See which books you currently have and who they belong to.
+              Books that have already been approved and handed over to you.
             </p>
           </div>
         </div>
 
-        {borrowedBooks.length === 0 ? (
+        {borrowedByMeOrders.length === 0 ? (
           <div className="rounded-xl border border-border bg-muted/30 p-8 text-center text-muted-foreground">
-            {borrowerNamesAvailable
-              ? "You are not currently borrowing any books."
-              : "Borrowed-book history is unavailable because your schema does not store the current borrower name."}
+            You are not currently borrowing any approved books.
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {borrowedBooks.map((book) => (
+            {borrowedByMeOrders.map((order) => (
               <div
-                key={book.id}
+                key={order.id}
                 className="rounded-xl border border-border bg-card p-4 shadow-sm"
               >
                 <div className="flex gap-4">
                   <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
-                    {book.cover_url ? (
+                    {order.book?.cover_url ? (
                       <BookCoverImage
-                        src={book.cover_url}
-                        alt={`Cover of ${book.title}`}
+                        src={order.book.cover_url}
+                        alt={`Cover of ${order.book.title}`}
                         className="object-contain"
                         sizes="80px"
                       />
@@ -321,24 +365,30 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
                     <div className="space-y-1">
                       <button
                         type="button"
-                        onClick={() => setSelectedBook(book)}
+                        onClick={() => order.book && setSelectedBook(order.book)}
                         className="text-left font-semibold text-foreground hover:text-blue-600"
                       >
-                        {book.title}
+                        {order.book?.title || "Unknown book"}
                       </button>
-                      <p className="text-sm text-muted-foreground">by {book.author}</p>
+                      <p className="text-sm text-muted-foreground">
+                        by {order.book?.author || "Unknown author"}
+                      </p>
                     </div>
 
                     <p className="text-sm text-muted-foreground">
-                      Owned by <span className="font-medium text-foreground">{book.owner_name || "Unknown owner"}</span>
+                      Owned by{" "}
+                      <span className="font-medium text-foreground">
+                        {order.book?.owner_name || "Unknown owner"}
+                      </span>
                     </p>
 
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleReturn(book.id)}
+                      onClick={() => handleReturnOrder(order.id)}
+                      disabled={actingOrderId === order.id}
                     >
-                      Mark as Returned
+                      {actingOrderId === order.id ? "Returning..." : "Mark as Returned"}
                     </Button>
                   </div>
                 </div>
@@ -352,9 +402,17 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
         <BookDetailsModal
           book={selectedBook}
           userId={userId}
+          canReturn={borrowedByMeOrders.some((order) => order.book_id === selectedBook.id)}
           onClose={() => setSelectedBook(null)}
-          onBorrow={handleBorrow}
-          onReturn={handleReturn}
+          onBorrow={() => {}}
+          onReturn={(bookId) => {
+            const matchingOrder = borrowedByMeOrders.find(
+              (order) => order.book_id === bookId
+            );
+            if (matchingOrder) {
+              handleReturnOrder(matchingOrder.id);
+            }
+          }}
         />
       )}
     </div>

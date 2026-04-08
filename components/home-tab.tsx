@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { updateBookBorrowState } from "@/lib/book-borrowing";
-import { isClicksTableMissing, safeTrackBookClick } from "@/lib/book-clicks";
+import { safeTrackBookClick } from "@/lib/book-clicks";
+import { requestBorrow } from "@/lib/book-orders";
 import { createClient } from "@/lib/supabase/client";
 import { Book } from "@/lib/types";
 import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
@@ -35,49 +35,22 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
 
     setLatestBooks(await resolveBookCoverUrls(latest || []));
 
-    // Fetch recommended books based on user interactions
+    // Fetch personalized recommendations based on recent clicks and orders
     if (userId) {
-      // Get genres the user has interacted with
-      const { data: interactions, error: interactionsError } = await supabase
-        .from("clicks")
-        .select("book_id")
-        .eq("user_id", userId)
-        .order("clicked_at", { ascending: false })
-        .limit(20);
+      const response = await fetch("/api/personalized-recommendations");
 
-      if (isClicksTableMissing(interactionsError)) {
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        console.error(
+          "Failed to fetch personalized recommendations:",
+          result?.error || response.statusText
+        );
         setRecommendedBooks([]);
-      } else if (interactionsError) {
-        console.error("Failed to fetch interactions:", interactionsError);
-        setRecommendedBooks([]);
-      } else if (!interactions) {
-        setRecommendedBooks([]);
-      } else if (interactions.length > 0) {
-        const bookIds = interactions.map((i) => i.book_id);
-
-        // Get the genres of interacted books
-        const { data: interactedBooks } = await supabase
-          .from("books")
-          .select("genre_tag")
-          .in("id", bookIds);
-
-        const genres = [...new Set(interactedBooks?.map((b) => b.genre_tag).filter(Boolean))];
-
-        if (genres.length > 0) {
-          // Recommend books from similar genres that user hasn't interacted with
-          const { data: recommended } = await supabase
-            .from("books")
-            .select("*")
-            .in("genre_tag", genres)
-            .not("id", "in", `(${bookIds.join(",")})`)
-            .eq("status", true)
-            .order("created_at", { ascending: false })
-            .limit(8);
-
-          setRecommendedBooks(await resolveBookCoverUrls(recommended || []));
-        }
       } else {
-        setRecommendedBooks([]);
+        const result = await response.json();
+        setRecommendedBooks(
+          await resolveBookCoverUrls(result.recommendations || [])
+        );
       }
     }
 
@@ -98,6 +71,7 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
       });
     }
     setSelectedBook(book);
+    fetchBooks();
   };
 
   const handleBorrow = async (bookId: number) => {
@@ -114,33 +88,20 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
       return;
     }
 
-    const { error } = await updateBookBorrowState(supabase, bookId, {
-      status: false,
-      currentBorrowerId: userId,
-    });
+    const result = await requestBorrow(bookId);
 
-    if (error) {
-      alert("Failed to borrow book: " + error.message);
+    if (!result.ok) {
+      alert(result.error);
       return;
     }
 
+    alert("Borrow request sent");
     setSelectedBook(null);
     fetchBooks();
   };
 
   const handleReturn = async (bookId: number) => {
-    const { error } = await updateBookBorrowState(supabase, bookId, {
-      status: true,
-      currentBorrowerId: null,
-    });
-
-    if (error) {
-      alert("Failed to return book: " + error.message);
-      return;
-    }
-
-    setSelectedBook(null);
-    fetchBooks();
+    void bookId;
   };
 
   if (loading) {

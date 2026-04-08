@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { updateBookBorrowState } from "@/lib/book-borrowing";
 import { safeTrackBookClick } from "@/lib/book-clicks";
+import { requestBorrow } from "@/lib/book-orders";
 import { Book, GENRE_TAGS } from "@/lib/types";
 import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
 import { BookCard } from "./book-card";
@@ -220,35 +220,21 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
       return;
     }
 
-    const { error } = await updateBookBorrowState(supabase, bookId, {
-      status: false,
-      currentBorrowerId: userId,
-    });
+    const result = await requestBorrow(bookId);
 
-    if (error) {
-      alert("Failed to borrow book: " + error.message);
+    if (!result.ok) {
+      alert(result.error);
       return;
     }
 
+    alert("Borrow request sent");
     setSelectedBook(null);
     setSelectedCopies(undefined);
     setRefreshTrigger((prev) => prev + 1);
   };
 
   const handleReturn = async (bookId: number) => {
-    const { error } = await updateBookBorrowState(supabase, bookId, {
-      status: true,
-      currentBorrowerId: null,
-    });
-
-    if (error) {
-      alert("Failed to return book: " + error.message);
-      return;
-    }
-
-    setSelectedBook(null);
-    setSelectedCopies(undefined);
-    setRefreshTrigger((prev) => prev + 1);
+    void bookId;
   };
 
   const clearFilters = () => {

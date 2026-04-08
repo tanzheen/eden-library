@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { updateBookBorrowState } from "@/lib/book-borrowing";
 import { safeTrackBookClick } from "@/lib/book-clicks";
+import { requestBorrow } from "@/lib/book-orders";
 import { createClient } from "@/lib/supabase/client";
 import { Book } from "@/lib/types";
 import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
@@ -84,32 +84,19 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
       return;
     }
 
-    const { error } = await updateBookBorrowState(supabase, bookId, {
-      status: false,
-      currentBorrowerId: userId,
-    });
+    const result = await requestBorrow(bookId);
 
-    if (error) {
-      alert("Failed to borrow book: " + error.message);
+    if (!result.ok) {
+      alert(result.error);
       return;
     }
 
+    alert("Borrow request sent");
     setSelectedBook(null);
-    setRecommendations((prev) => prev.filter((book) => book.id !== bookId));
   };
 
   const handleReturn = async (bookId: number) => {
-    const { error } = await updateBookBorrowState(supabase, bookId, {
-      status: true,
-      currentBorrowerId: null,
-    });
-
-    if (error) {
-      alert("Failed to return book: " + error.message);
-      return;
-    }
-
-    setSelectedBook(null);
+    void bookId;
   };
 
   if (!userId || !userName) {

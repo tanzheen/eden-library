@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { cosineSimilarity, parseEmbedding } from "@/lib/embedding-utils";
 import { generateBookRecommendationPrompt } from "@/lib/prompts/book-recommendation-prompt";
 
 interface BookRecord {
@@ -17,64 +18,6 @@ interface BookRecord {
   owner_name: string | null;
   owner_id: string | null;
   status: boolean;
-}
-
-function parseEmbedding(value: unknown) {
-  if (!value) return null;
-
-  if (Array.isArray(value)) {
-    const numeric = value.filter((item): item is number => typeof item === "number");
-    return numeric.length > 0 ? numeric : null;
-  }
-
-  if (typeof value === "object") {
-    const maybeValues = (value as { values?: unknown }).values;
-    if (Array.isArray(maybeValues)) {
-      const numeric = maybeValues.filter(
-        (item): item is number => typeof item === "number"
-      );
-      return numeric.length > 0 ? numeric : null;
-    }
-  }
-
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
-    return null;
-  }
-
-  const parsed = trimmed
-    .slice(1, -1)
-    .split(",")
-    .map((item) => Number(item.trim()))
-    .filter((item) => Number.isFinite(item));
-
-  return parsed.length > 0 ? parsed : null;
-}
-
-function cosineSimilarity(a: number[], b: number[]) {
-  if (a.length !== b.length || a.length === 0) {
-    return -1;
-  }
-
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < a.length; i += 1) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-
-  if (normA === 0 || normB === 0) {
-    return -1;
-  }
-
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 export async function POST(request: NextRequest) {
@@ -107,7 +50,19 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
     const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const borrowedBookIds: number[] = [];
+    const { data: previousOrders, error: ordersError } = await adminClient
+      .from("orders")
+      .select("book_id")
+      .eq("borrower_id", user.id)
+      .in("status", ["borrowed", "returned"]);
+
+    if (ordersError) {
+      return NextResponse.json({ error: ordersError.message }, { status: 500 });
+    }
+
+    const borrowedBookIds = [
+      ...new Set((previousOrders || []).map((item) => item.book_id)),
+    ];
 
     let candidateQuery = adminClient
       .from("books")
