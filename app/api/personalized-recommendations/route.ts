@@ -146,7 +146,7 @@ export async function GET() {
       );
     }
 
-    const rankedBooks = ((candidateBooks || []) as BookRecord[])
+    const rankedCandidates = ((candidateBooks || []) as BookRecord[])
       .map((book) => {
         const embedding = parseEmbedding(book.embedding);
         return embedding
@@ -156,10 +156,11 @@ export async function GET() {
             }
           : null;
       })
-      .filter(
-        (book): book is BookRecord & { similarity: number } =>
-          Boolean(book) && book.similarity > 0
-      )
+      .filter((book): book is BookRecord & { similarity: number } => {
+        return book !== null && book.similarity > 0;
+      });
+
+    const rankedBooks = rankedCandidates
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 8)
       .map((book) => ({

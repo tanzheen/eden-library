@@ -76,8 +76,15 @@ export async function prepareBookMetadataInput(
             : null;
         }
 
+        const imageRecord = image as {
+          src?: string;
+          url?: string;
+          host?: string;
+          title?: string;
+        };
+
         const normalized =
-          normalizeImageUrl(image.src) || normalizeImageUrl(image.url);
+          normalizeImageUrl(imageRecord.src) || normalizeImageUrl(imageRecord.url);
 
         if (!normalized) {
           return null;
@@ -85,8 +92,8 @@ export async function prepareBookMetadataInput(
 
         return {
           imageUrl: normalized,
-          source: image.host || image.title || "Tavily image result",
-          title: image.title,
+          source: imageRecord.host || imageRecord.title || "Tavily image result",
+          title: imageRecord.title,
         };
       })
       .filter(Boolean) as CoverOption[]

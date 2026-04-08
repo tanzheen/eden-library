@@ -16,7 +16,7 @@ function isMissingClicksTable(error: TableError | null | undefined) {
 export async function safeTrackBookClick(
   supabase: {
     from: (table: string) => {
-      insert: (value: Record<string, unknown>) => Promise<{ error: TableError | null }>;
+      insert: (value: Record<string, unknown>) => PromiseLike<{ error: TableError | null }>;
     };
   },
   payload: {

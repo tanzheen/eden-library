@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { updateBookBorrowState } from "@/lib/book-borrowing";
+import { requestBorrow } from "@/lib/book-orders";
 import { createClient } from "@/lib/supabase/client";
 import { Book } from "@/lib/types";
 import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
@@ -46,42 +46,26 @@ export function BookList({ refreshTrigger, userId }: BookListProps) {
   }, [refreshTrigger]);
 
   const handleBorrow = async (bookId: number) => {
-    const borrowerName = prompt("Enter your name to borrow this book:");
-    if (!borrowerName) return;
-
     const book = books.find((item) => item.id === bookId);
     if (userId && book?.owner_id === userId) {
       alert("You cannot borrow your own book");
       return;
     }
 
-    const { error: updateError } = await updateBookBorrowState(supabase, bookId, {
-      status: false,
-      currentBorrowerId: userId || null,
-    });
+    const result = await requestBorrow(bookId);
 
-    if (updateError) {
-      alert("Failed to borrow book: " + updateError.message);
+    if (!result.ok) {
+      alert(result.error);
       return;
     }
 
+    alert("Borrow request sent");
     setSelectedBook(null);
     fetchBooks();
   };
 
   const handleReturn = async (bookId: number) => {
-    const { error: updateError } = await updateBookBorrowState(supabase, bookId, {
-      status: true,
-      currentBorrowerId: null,
-    });
-
-    if (updateError) {
-      alert("Failed to return book: " + updateError.message);
-      return;
-    }
-
-    setSelectedBook(null);
-    fetchBooks();
+    void bookId;
   };
 
   const handleViewDetails = (book: Book) => {

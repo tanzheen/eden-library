@@ -24,10 +24,14 @@ export function BookExchange() {
             Browse available books to borrow or share your own
           </p>
         </div>
-        <AddBookForm onBookAdded={handleBookAdded} />
+        <AddBookForm
+          onBookAdded={handleBookAdded}
+          userId={null}
+          userName={null}
+        />
       </div>
 
-      <BookList refreshTrigger={refreshTrigger} />
+      <BookList refreshTrigger={refreshTrigger} userId={null} />
     </div>
   );
 }

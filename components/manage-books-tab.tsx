@@ -24,6 +24,28 @@ interface OrderRecord {
   book?: Book;
 }
 
+interface RawOrderRecord {
+  id: number;
+  book_id: number;
+  owner_id: string;
+  borrower_id: string;
+  status: "requested" | "borrowed" | "returned" | "cancelled";
+  book?: Book | Book[] | null;
+}
+
+function normalizeOrderRecord(order: RawOrderRecord): OrderRecord {
+  const normalizedBook = Array.isArray(order.book) ? order.book[0] : order.book;
+
+  return {
+    id: order.id,
+    book_id: order.book_id,
+    owner_id: order.owner_id,
+    borrower_id: order.borrower_id,
+    status: order.status,
+    book: normalizedBook || undefined,
+  };
+}
+
 export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
   const [ownedBooks, setOwnedBooks] = useState<Book[]>([]);
   const [requestedOrders, setRequestedOrders] = useState<OrderRecord[]>([]);
@@ -78,12 +100,16 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
       setBorrowedOutOrders([]);
     } else {
       const resolvedOwnerOrders = await Promise.all(
-        ((ownerOrders || []) as OrderRecord[]).map(async (order) => ({
+        ((ownerOrders || []) as RawOrderRecord[]).map(async (rawOrder) => {
+          const order = normalizeOrderRecord(rawOrder);
+
+          return {
           ...order,
           book: order.book
             ? (await resolveBookCoverUrls([order.book]))[0]
             : undefined,
-        }))
+          };
+        })
       );
 
       setRequestedOrders(
@@ -99,12 +125,16 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
       setBorrowedByMeOrders([]);
     } else {
       const resolvedBorrowedOrders = await Promise.all(
-        ((borrowedByMe || []) as OrderRecord[]).map(async (order) => ({
+        ((borrowedByMe || []) as RawOrderRecord[]).map(async (rawOrder) => {
+          const order = normalizeOrderRecord(rawOrder);
+
+          return {
           ...order,
           book: order.book
             ? (await resolveBookCoverUrls([order.book]))[0]
             : undefined,
-        }))
+          };
+        })
       );
 
       setBorrowedByMeOrders(resolvedBorrowedOrders);
