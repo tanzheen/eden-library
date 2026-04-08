@@ -114,6 +114,26 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
 
   return (
     <div className="space-y-10">
+      {/* Recommended Books Section */}
+      {userId && recommendedBooks.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <Sparkles className="h-5 w-5 text-amber-500" />
+            <h2 className="text-xl font-bold">Recommended for You</h2>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {recommendedBooks.map((book) => (
+              <BookCard
+                key={book.id}
+                book={book}
+                userId={userId}
+                onViewDetails={handleViewDetails}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Latest Books Section */}
       <section>
         <div className="flex items-center gap-2 mb-6">
@@ -137,26 +157,6 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
           </p>
         )}
       </section>
-
-      {/* Recommended Books Section */}
-      {userId && recommendedBooks.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-6">
-            <Sparkles className="h-5 w-5 text-amber-500" />
-            <h2 className="text-xl font-bold">Recommended for You</h2>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {recommendedBooks.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                userId={userId}
-                onViewDetails={handleViewDetails}
-              />
-            ))}
-          </div>
-        </section>
-      )}
 
       {userId && recommendedBooks.length === 0 && (
         <section className="bg-muted/50 rounded-lg p-6 text-center">
