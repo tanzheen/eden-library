@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { tavily } from "@tavily/core";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,44 +13,51 @@ export async function GET(request: Request) {
     );
   }
 
-  const apiKey = process.env.GOOGLE_API_KEY;
-  const cx = process.env.GOOGLE_CX_KEY;
-
-  if (!apiKey || !cx) {
+  if (!process.env.TAVILY_API_KEY) {
     return NextResponse.json(
-      { error: "Server configuration error: Missing Google API keys" },
+      { error: "Server configuration error: Missing Tavily API key" },
       { status: 500 }
     );
   }
 
   try {
-    const query = `${title} ${author} book cover`;
-    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&searchType=image&num=8&imgType=photo`;
+    const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
-    const response = await fetch(url);
-    const data = await response.json();
+    const result = await tavilyClient.search(
+      `${title} by ${author} book cover`,
+      {
+        searchDepth: "basic",
+        includeImages: true,
+        includeAnswer: false,
+        maxResults: 5,
+      }
+    );
 
-    if (!response.ok) {
-      console.error("Google Custom Search error:", data);
-      return NextResponse.json(
-        { error: data.error?.message || "Google image search failed" },
-        { status: 500 }
-      );
-    }
+    const seen = new Set<string>();
+    const images = (result.images || [])
+      .map((image) => {
+        const raw = typeof image === "string" ? image : (image as { src?: string; url?: string; host?: string; title?: string }).src || (image as { url?: string }).url;
+        const imageUrl = raw?.replace("http://", "https://").replace("&edge=curl", "");
+        if (!imageUrl) return null;
 
-    const images = (data.items || []).map((item: {
-      link: string;
-      displayLink?: string;
-      title?: string;
-    }) => ({
-      imageUrl: item.link,
-      source: item.displayLink || "Google Images",
-      title: item.title,
-    }));
+        const record = typeof image === "object" ? image as { host?: string; title?: string } : null;
+        return {
+          imageUrl,
+          source: record?.host || record?.title || "Tavily",
+          title: record?.title,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => {
+        if (!item) return false;
+        if (seen.has(item.imageUrl)) return false;
+        seen.add(item.imageUrl);
+        return true;
+      })
+      .slice(0, 6);
 
     return NextResponse.json({ images });
   } catch (error) {
-    console.error("Google image search error:", error);
+    console.error("Tavily image search error:", error);
     return NextResponse.json(
       { error: "Failed to search for cover images" },
       { status: 500 }

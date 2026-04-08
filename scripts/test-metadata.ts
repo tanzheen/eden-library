@@ -89,13 +89,13 @@ async function testMetadataGeneration(bookName: string, authorName: string, forc
     [bookInfoResult, difficultyResult] = await Promise.all([
       tavilyClient.search(`${bookName} by ${authorName}`, {
         includeAnswer: "basic",
-        searchDepth: "advanced",
+        searchDepth: "basic",
         includeImages: true,
         maxResults: 2,
       }),
       tavilyClient.search(`${bookName} by ${authorName} reading difficulty`, {
         includeAnswer: "basic",
-        searchDepth: "advanced",
+        searchDepth: "basic",
         maxResults: 2,
       }),
     ]);

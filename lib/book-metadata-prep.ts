@@ -23,14 +23,14 @@ export async function prepareBookMetadataInput(
   const [bookInfoResult, difficultyResult] = await Promise.all([
     tavilyClient.search(`${bookName} by ${authorName}`, {
       includeAnswer: "basic",
-      searchDepth: "advanced",
+      searchDepth: "basic",
       includeImages: false,
       includeRawContent: "text",
       maxResults: 2,
     }),
     tavilyClient.search(`${bookName} by ${authorName} reading difficulty`, {
       includeAnswer: "basic",
-      searchDepth: "advanced",
+      searchDepth: "basic",
       includeRawContent: "text",
       maxResults: 2,
     }),
