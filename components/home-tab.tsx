@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { updateBookBorrowState } from "@/lib/book-borrowing";
+import { isClicksTableMissing, safeTrackBookClick } from "@/lib/book-clicks";
 import { createClient } from "@/lib/supabase/client";
 import { Book } from "@/lib/types";
+import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
 import { BookCard } from "./book-card";
 import { BookDetailsModal } from "./book-details-modal";
 import { Loader2, Sparkles, Clock } from "lucide-react";
@@ -30,19 +33,26 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
       .order("created_at", { ascending: false })
       .limit(8);
 
-    setLatestBooks(latest || []);
+    setLatestBooks(await resolveBookCoverUrls(latest || []));
 
     // Fetch recommended books based on user interactions
     if (userId) {
       // Get genres the user has interacted with
-      const { data: interactions } = await supabase
-        .from("book_interactions")
+      const { data: interactions, error: interactionsError } = await supabase
+        .from("clicks")
         .select("book_id")
         .eq("user_id", userId)
-        .order("created_at", { ascending: false })
+        .order("clicked_at", { ascending: false })
         .limit(20);
 
-      if (interactions && interactions.length > 0) {
+      if (isClicksTableMissing(interactionsError)) {
+        setRecommendedBooks([]);
+      } else if (interactionsError) {
+        console.error("Failed to fetch interactions:", interactionsError);
+        setRecommendedBooks([]);
+      } else if (!interactions) {
+        setRecommendedBooks([]);
+      } else if (interactions.length > 0) {
         const bookIds = interactions.map((i) => i.book_id);
 
         // Get the genres of interacted books
@@ -64,8 +74,10 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
             .order("created_at", { ascending: false })
             .limit(8);
 
-          setRecommendedBooks(recommended || []);
+          setRecommendedBooks(await resolveBookCoverUrls(recommended || []));
         }
+      } else {
+        setRecommendedBooks([]);
       }
     }
 
@@ -76,62 +88,57 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
     fetchBooks();
   }, [userId]);
 
-  const trackInteraction = async (bookId: number, type: "click" | "borrow" | "return") => {
-    if (!userId) return;
-
-    await supabase.from("book_interactions").insert({
-      user_id: userId,
-      book_id: bookId,
-      interaction_type: type,
-    });
-  };
-
   const handleViewDetails = async (book: Book) => {
-    await trackInteraction(book.id, "click");
+    if (userId && book.owner_id) {
+      await safeTrackBookClick(supabase, {
+        user_id: userId,
+        book_id: book.id,
+        owner_id: book.owner_id,
+        source: "home",
+      });
+    }
     setSelectedBook(book);
   };
 
   const handleBorrow = async (bookId: number) => {
-    if (!userName) {
+    if (!userId || !userName) {
       alert("Please sign in to borrow books");
       return;
     }
 
-    const { error } = await supabase
-      .from("books")
-      .update({
-        status: false,
-        current_borrower: userName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", bookId);
+    const book = [...latestBooks, ...recommendedBooks].find(
+      (item) => item.id === bookId
+    );
+    if (book?.owner_id === userId) {
+      alert("You cannot borrow your own book");
+      return;
+    }
+
+    const { error } = await updateBookBorrowState(supabase, bookId, {
+      status: false,
+      currentBorrowerId: userId,
+    });
 
     if (error) {
       alert("Failed to borrow book: " + error.message);
       return;
     }
 
-    await trackInteraction(bookId, "borrow");
     setSelectedBook(null);
     fetchBooks();
   };
 
   const handleReturn = async (bookId: number) => {
-    const { error } = await supabase
-      .from("books")
-      .update({
-        status: true,
-        current_borrower: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", bookId);
+    const { error } = await updateBookBorrowState(supabase, bookId, {
+      status: true,
+      currentBorrowerId: null,
+    });
 
     if (error) {
       alert("Failed to return book: " + error.message);
       return;
     }
 
-    await trackInteraction(bookId, "return");
     setSelectedBook(null);
     fetchBooks();
   };
@@ -158,6 +165,7 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
               <BookCard
                 key={book.id}
                 book={book}
+                userId={userId}
                 onViewDetails={handleViewDetails}
               />
             ))}
@@ -181,6 +189,7 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
               <BookCard
                 key={book.id}
                 book={book}
+                userId={userId}
                 onViewDetails={handleViewDetails}
               />
             ))}
@@ -201,6 +210,7 @@ export function HomeTab({ userId, userName }: HomeTabProps) {
       {selectedBook && (
         <BookDetailsModal
           book={selectedBook}
+          userId={userId}
           onClose={() => setSelectedBook(null)}
           onBorrow={handleBorrow}
           onReturn={handleReturn}

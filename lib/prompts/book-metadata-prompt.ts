@@ -73,20 +73,20 @@ ${input.searchContent}
 Classify this book into the following categories:
 
 1. GENRE (choose exactly ONE):
-   - "Bible Skills" - Books about studying scripture, digging deeper into the Bible, preaching books
+   - "Bible Skills" - Books about studying scripture, digging deeper into the Bible, preaching books, commentary books
    - "Church" - God's new community, mission of the church, healthy church, ministry
    - "Cross & Resurrection" - The cross of Christ, atonement, resurrection theology
    - "Culture & Social Issues" - Mental health, atheistic movement, engaging culture
    - "Evangelism & Missions" - Honest evangelism, sharing faith, missionary work
    - "Gender & Sexuality" - LGBT topics, complementarianism, sex, marriage, dating
-   - "Gospel Living" - Work & rest, money, living in godliness, holiness, practical Christianity
-   - "Devotionals" - Books meant for daily reading and reflection
-   - "Theology" - Prayer, Holy Spirit, God's character, doctrinal studies
+   - "Gospel Living" - Work & rest, money, living in godliness, holiness, practical Christianity, Prayer
+   - "Devotionals" - Books meant for daily reading and reflection: has specific daily readings and prayers
+   - "Theology" -  Holy Spirit, God's character, doctrinal studies
 
 2. DIFFICULTY (choose exactly ONE based on reading difficulty search results) :
    - "Casual Reading" - Easy to read, accessible language, can be finished quickly
    - "Moderate Intermediate" - Requires some engagement, moderate length
-   - "Dense or Academic" - Scholarly, requires significant study, theological depth
+   - "Dense or Academic" - Scholarly, requires significant study, theological depth OR long time commitment to read
    - "Children" - Written specifically for children or young readers
 
 3. PURPOSE (choose exactly ONE based on best use case):

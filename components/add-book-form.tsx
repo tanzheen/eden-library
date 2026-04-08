@@ -2,11 +2,25 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Autocomplete, BookSuggestion } from "./ui/autocomplete";
 import { Plus, X, Search, Loader2, Check, ImageOff } from "lucide-react";
+
+interface CoverOption {
+  imageUrl: string;
+  source: string;
+  title?: string;
+}
+
+interface PreparedBookMetadataInput {
+  prompt: string;
+  bookInfoAnswer: string;
+  difficultyAnswer: string;
+  searchContent: string;
+}
 
 interface AddBookFormProps {
   onBookAdded: () => void;
@@ -20,6 +34,9 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
   const [searchingImage, setSearchingImage] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [coverOptions, setCoverOptions] = useState<CoverOption[]>([]);
+  const [preparedMetadata, setPreparedMetadata] =
+    useState<PreparedBookMetadataInput | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     author: "",
@@ -45,18 +62,24 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
     }
 
     setSearchingImage(true);
+    setCoverOptions([]);
+    setPreparedMetadata(null);
 
     try {
-      const query = `${formData.title} ${formData.author} book cover`;
-      const response = await fetch(`/api/search-image?q=${encodeURIComponent(query)}`);
+      const response = await fetch(
+        `/api/search-image?title=${encodeURIComponent(formData.title)}&author=${encodeURIComponent(formData.author)}`
+      );
       const data = await response.json();
 
-      if (data.imageUrl) {
-        setImageLoading(true);
-        setImageError(false);
-        setFormData({ ...formData, cover_url: data.imageUrl });
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to search for cover images");
+      }
+
+      if (Array.isArray(data.images) && data.images.length > 0) {
+        setCoverOptions(data.images.slice(0, 4));
+        setPreparedMetadata(data.preparedMetadata || null);
       } else {
-        alert("No cover image found. You can enter a URL manually.");
+        alert("No cover images found. You can enter a URL manually.");
       }
     } catch (error) {
       console.error("Error searching for image:", error);
@@ -90,6 +113,7 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
         author: formData.author,
         cover_url: formData.cover_url || null,
         existingBookMetadata: existingBookMetadata,
+        preparedMetadata: existingBookMetadata ? null : preparedMetadata,
       }),
     });
 
@@ -115,6 +139,8 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
       author: "",
       cover_url: "",
     });
+    setCoverOptions([]);
+    setPreparedMetadata(null);
     setExistingBookMetadata(null);
     setIsOpen(false);
     onBookAdded();
@@ -129,7 +155,12 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
     fetch("/api/generate-book-metadata", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bookName, authorName, bookId }),
+      body: JSON.stringify({
+        bookName,
+        authorName,
+        bookId,
+        preparedMetadata,
+      }),
     }).catch((error) => {
       console.error("Error triggering book metadata generation:", error);
     });
@@ -171,6 +202,8 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                 value={formData.title}
                 onChange={(value) => {
                   setFormData({ ...formData, title: value });
+                  setCoverOptions([]);
+                  setPreparedMetadata(null);
                   setExistingBookMetadata(null); // Clear metadata when manually typing
                 }}
                 onSelect={(book) => {
@@ -181,6 +214,8 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                     cover_url: book.cover_url || "",
                   });
                   setExistingBookMetadata(book); // Store full metadata
+                  setCoverOptions([]);
+                  setPreparedMetadata(null);
                   if (book.cover_url) {
                     setImageLoading(true);
                     setImageError(false);
@@ -201,9 +236,11 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                 id="author"
                 placeholder="Enter author name"
                 value={formData.author}
-                onChange={(e) =>
-                  setFormData({ ...formData, author: e.target.value })
-                }
+                onChange={(e) => {
+                  setFormData({ ...formData, author: e.target.value });
+                  setCoverOptions([]);
+                  setPreparedMetadata(null);
+                }}
                 required
               />
             </div>
@@ -217,6 +254,8 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                   value={formData.cover_url}
                   onChange={(e) => {
                     setFormData({ ...formData, cover_url: e.target.value });
+                    setCoverOptions([]);
+                    setPreparedMetadata(null);
                     if (e.target.value) {
                       setImageLoading(true);
                       setImageError(false);
@@ -239,6 +278,61 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                   Find Cover
                 </Button>
               </div>
+              {coverOptions.length > 0 && (
+                <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3">
+                  <p className="text-sm font-medium text-foreground">
+                    Select the correct cover
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Click the image that matches the book you want to add.
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {coverOptions.map((option) => {
+                      const isSelected = formData.cover_url === option.imageUrl;
+
+                      return (
+                        <button
+                          key={option.imageUrl}
+                          type="button"
+                          onClick={() => {
+                          setFormData({ ...formData, cover_url: option.imageUrl });
+                          setImageLoading(true);
+                          setImageError(false);
+                          }}
+                          className={`overflow-hidden rounded-lg border text-left transition-all ${
+                            isSelected
+                              ? "border-blue-600 ring-2 ring-blue-500/30"
+                              : "border-border hover:border-blue-400"
+                          }`}
+                        >
+                          <div className="relative aspect-[2/3] bg-background">
+                            <Image
+                              src={option.imageUrl}
+                              alt={option.title || "Cover option"}
+                              fill
+                              className="object-contain"
+                              sizes="(max-width: 640px) 50vw, 160px"
+                            />
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 rounded-full bg-blue-600 p-1 text-white">
+                                <Check className="h-3 w-3" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-1 border-t border-border bg-card p-2">
+                            <p className="line-clamp-2 text-xs font-medium text-foreground">
+                              {option.title || "Possible cover match"}
+                            </p>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {option.source}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {formData.cover_url && (
                 <div className="mt-3 p-3 bg-muted/50 rounded-lg border border-border">
                   <div className="flex gap-4">
@@ -254,10 +348,12 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                           <span className="text-xs">Failed to load</span>
                         </div>
                       )}
-                      <img
+                      <Image
                         src={formData.cover_url}
                         alt="Cover preview"
-                        className={`object-cover w-full h-full ${imageLoading || imageError ? "opacity-0" : "opacity-100"}`}
+                        fill
+                        sizes="112px"
+                        className={`object-contain ${imageLoading || imageError ? "opacity-0" : "opacity-100"}`}
                         onLoad={() => {
                           setImageLoading(false);
                           setImageError(false);
@@ -286,6 +382,8 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
                         size="sm"
                         onClick={() => {
                           setFormData({ ...formData, cover_url: "" });
+                          setCoverOptions([]);
+                          setPreparedMetadata(null);
                           setImageError(false);
                         }}
                         className="w-fit text-destructive hover:text-destructive"

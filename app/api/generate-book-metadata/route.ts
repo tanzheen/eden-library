@@ -1,22 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
-import { tavily } from "@tavily/core";
 import { GoogleGenAI } from "@google/genai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  generateBookMetadataPrompt,
   BookMetadataResult,
+  BookGenre,
+  BookDifficulty,
+  BookPurpose,
   BOOK_GENRES,
   BOOK_DIFFICULTIES,
   BOOK_PURPOSES,
 } from "@/lib/prompts/book-metadata-prompt";
+import {
+  prepareBookMetadataInput,
+  PreparedBookMetadataInput,
+} from "@/lib/book-metadata-prep";
 
 // Allow up to 60 seconds for background processing
 export const maxDuration = 60;
 
+function toPgVectorLiteral(values: number[]) {
+  return `[${values.join(",")}]`;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { bookName, authorName, bookId } = await request.json();
+    const { bookName, authorName, bookId, preparedMetadata } =
+      await request.json();
 
     if (!bookName || !authorName) {
       return NextResponse.json(
@@ -51,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Schedule background processing and return immediately
     after(async () => {
-      await processBookMetadata(bookId, bookName, authorName);
+      await processBookMetadata(bookId, bookName, authorName, preparedMetadata);
     });
 
     return NextResponse.json({
@@ -71,64 +81,26 @@ export async function POST(request: NextRequest) {
 async function processBookMetadata(
   bookId: number,
   bookName: string,
-  authorName: string
+  authorName: string,
+  preparedMetadata?: PreparedBookMetadataInput
 ) {
   console.log(`[Background] Starting metadata generation for book ${bookId}: "${bookName}"`);
 
   try {
-    const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY! });
     const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
     const supabase = createAdminClient();
 
-    // Run both Tavily searches in parallel
-    const [bookInfoResult, difficultyResult] = await Promise.all([
-      tavilyClient.search(`${bookName} by ${authorName}`, {
-        includeAnswer: "basic",
-        searchDepth: "advanced",
-        includeImages: true,
-        maxResults: 2,
-      }),
-      tavilyClient.search(`${bookName} by ${authorName} reading difficulty`, {
-        includeAnswer: "basic",
-        searchDepth: "advanced",
-        maxResults: 2,
-      }),
-    ]);
+    const prepared =
+      preparedMetadata || (await prepareBookMetadataInput(bookName, authorName)).preparedMetadata;
 
-    console.log(`[Background] Tavily search complete for book ${bookId}`);
-
-    // Get the first image URL
-    const images = bookInfoResult.images || [];
-    let savedImageUrl: string | null = null;
-    if (images.length > 0) {
-      const firstImage = images[0];
-      const imageUrl = typeof firstImage === "string" ? firstImage : firstImage?.url || null;
-
-      if (imageUrl) {
-        try {
-          savedImageUrl = await uploadImageToSupabase(imageUrl, bookId);
-        } catch (imageError) {
-          console.error(`[Background] Failed to upload image for book ${bookId}:`, imageError);
-          savedImageUrl = imageUrl; // Fall back to original URL
-        }
-      }
+    if (!preparedMetadata) {
+      console.log(`[Background] Tavily search complete for book ${bookId}`);
     }
-
-    // Prepare content for Gemini
-    const searchContent = bookInfoResult.results?.[0]?.content || "";
-
-    const prompt = generateBookMetadataPrompt({
-      bookName,
-      authorName,
-      bookInfoAnswer: bookInfoResult.answer || "",
-      difficultyAnswer: difficultyResult.answer || "",
-      searchContent,
-    });
 
     // Call Gemini to generate metadata
     const response = await genai.models.generateContent({
       model: "gemma-4-31b-it",
-      contents: prompt,
+      contents: prepared.prompt,
     });
 
     console.log(`[Background] Gemini metadata complete for book ${bookId}`);
@@ -146,16 +118,16 @@ async function processBookMetadata(
       metadata = JSON.parse(cleanedResponse);
 
       // Validate the response
-      if (!BOOK_GENRES.includes(metadata.genre as any)) {
+      if (!BOOK_GENRES.includes(metadata.genre as BookGenre)) {
         metadata.genre = "Theology";
       }
-      if (!BOOK_DIFFICULTIES.includes(metadata.difficulty as any)) {
+      if (!BOOK_DIFFICULTIES.includes(metadata.difficulty as BookDifficulty)) {
         metadata.difficulty = "Casual Reading";
       }
-      if (!BOOK_PURPOSES.includes(metadata.purpose as any)) {
+      if (!BOOK_PURPOSES.includes(metadata.purpose as BookPurpose)) {
         metadata.purpose = "Devotional/Reflection";
       }
-    } catch (parseError) {
+    } catch {
       console.error(`[Background] Failed to parse Gemini response for book ${bookId}:`, responseText);
       metadata = {
         genre: "Theology",
@@ -170,99 +142,67 @@ async function processBookMetadata(
     if (metadata.description) {
       try {
         const embeddingResponse = await genai.models.embedContent({
-          model: "text-embedding-004",
+          model: "gemini-embedding-001",
           contents: metadata.description,
         });
         embedding = embeddingResponse.embeddings?.[0]?.values || null;
-        console.log(`[Background] Embedding complete for book ${bookId}`);
+        if (embedding) {
+          console.log(
+            `[Background] Embedding complete for book ${bookId} (${embedding.length} dimensions)`
+          );
+        } else {
+          console.error(
+            `[Background] No embedding values returned for book ${bookId}`
+          );
+        }
       } catch (embeddingError) {
         console.error(`[Background] Failed to generate embedding for book ${bookId}:`, embeddingError);
       }
     }
 
-    // Update the book in Supabase (ISBN is already set by add-book route)
-    const updateData: Record<string, unknown> = {
+    const metadataUpdateData: Record<string, unknown> = {
       genre_tag: metadata.genre,
       difficulty: metadata.difficulty,
       purpose: metadata.purpose,
       description: metadata.description,
-      embedding: embedding,
     };
 
-    if (savedImageUrl) {
-      // Only update cover_url if the book doesn't already have one
-      const { data: currentBook } = await supabase
-        .from("books")
-        .select("cover_url")
-        .eq("id", bookId)
-        .single();
-
-      if (!currentBook?.cover_url) {
-        updateData.cover_url = savedImageUrl;
-      }
-    }
-
-    const { error: updateError } = await supabase
+    const { error: metadataUpdateError } = await supabase
       .from("books")
-      .update(updateData)
+      .update(metadataUpdateData)
       .eq("id", bookId);
 
-    if (updateError) {
-      console.error(`[Background] Failed to update book ${bookId}:`, updateError);
+    if (metadataUpdateError) {
+      console.error(
+        `[Background] Failed to update metadata for book ${bookId}:`,
+        metadataUpdateError
+      );
     } else {
-      console.log(`[Background] Successfully updated book ${bookId} with metadata`);
+      console.log(
+        `[Background] Successfully updated metadata for book ${bookId}`
+      );
+    }
+
+    if (embedding) {
+      const { error: embeddingUpdateError } = await supabase
+        .from("books")
+        .update({
+          embedding: toPgVectorLiteral(embedding),
+        })
+        .eq("id", bookId);
+
+      if (embeddingUpdateError) {
+        console.error(
+          `[Background] Failed to update embedding for book ${bookId}:`,
+          embeddingUpdateError
+        );
+      } else {
+        console.log(
+          `[Background] Successfully updated embedding for book ${bookId}`
+        );
+      }
     }
   } catch (error) {
     console.error(`[Background] Error processing book ${bookId}:`, error);
   }
-}
-
-async function uploadImageToSupabase(
-  imageUrl: string,
-  bookId: number
-): Promise<string> {
-  const supabase = createAdminClient();
-
-  // Fetch the image
-  const imageResponse = await fetch(imageUrl);
-  if (!imageResponse.ok) {
-    throw new Error(`Failed to fetch image: ${imageResponse.statusText}`);
-  }
-
-  const imageBlob = await imageResponse.blob();
-  const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
-
-  // Determine file extension
-  let extension = "jpg";
-  if (contentType.includes("png")) {
-    extension = "png";
-  } else if (contentType.includes("webp")) {
-    extension = "webp";
-  } else if (contentType.includes("gif")) {
-    extension = "gif";
-  }
-
-  const fileName = `book-covers/${bookId}-${Date.now()}.${extension}`;
-
-  // Convert blob to ArrayBuffer for upload
-  const arrayBuffer = await imageBlob.arrayBuffer();
-
-  // Upload to Supabase Storage
-  const { error } = await supabase.storage
-    .from("images")
-    .upload(fileName, arrayBuffer, {
-      contentType,
-      upsert: true,
-    });
-
-  if (error) {
-    throw new Error(`Supabase upload failed: ${error.message}`);
-  }
-
-  // Get public URL
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("images").getPublicUrl(fileName);
-
-  return publicUrl;
 }

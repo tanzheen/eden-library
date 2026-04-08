@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  isSupabaseStorageUrl,
+  uploadImageToSupabase,
+} from "@/lib/book-cover-storage";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -10,6 +14,9 @@ export async function POST(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
   if (!user) {
     return NextResponse.json(
@@ -19,7 +26,8 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { title, author, cover_url, existingBookMetadata } = body;
+  const { title, author, cover_url, existingBookMetadata, preparedMetadata } =
+    body;
 
   if (!title || !author) {
     return NextResponse.json(
@@ -117,6 +125,36 @@ export async function POST(request: Request) {
     );
   }
 
+  let finalBook = insertedBook;
+
+  if (
+    insertedBook.cover_url &&
+    !isSupabaseStorageUrl(insertedBook.cover_url)
+  ) {
+    try {
+      const uploadedCoverUrl = await uploadImageToSupabase(
+        insertedBook.cover_url,
+        insertedBook.id,
+        session?.access_token
+      );
+
+      const { data: updatedBook, error: coverUpdateError } = await adminClient
+        .from("books")
+        .update({ cover_url: uploadedCoverUrl })
+        .eq("id", insertedBook.id)
+        .select()
+        .single();
+
+      if (coverUpdateError) {
+        console.error("Failed to update book with Supabase cover URL:", coverUpdateError);
+      } else if (updatedBook) {
+        finalBook = updatedBook;
+      }
+    } catch (coverUploadError) {
+      console.error("Failed to upload chosen cover to Supabase Storage:", coverUploadError);
+    }
+  }
+
   // Trigger metadata generation for new books (runs in background)
   if (needsMetadataGeneration && insertedBook) {
     const origin = new URL(request.url).origin;
@@ -127,11 +165,12 @@ export async function POST(request: Request) {
         bookId: insertedBook.id,
         bookName: title,
         authorName: author,
+        preparedMetadata: preparedMetadata || null,
       }),
     }).catch((err) => {
       console.error("Failed to trigger metadata generation:", err);
     });
   }
 
-  return NextResponse.json({ book: insertedBook });
+  return NextResponse.json({ book: finalBook });
 }

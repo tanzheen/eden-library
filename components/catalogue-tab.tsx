@@ -2,11 +2,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { updateBookBorrowState } from "@/lib/book-borrowing";
+import { safeTrackBookClick } from "@/lib/book-clicks";
 import { Book, GENRE_TAGS } from "@/lib/types";
+import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
 import { BookCard } from "./book-card";
 import { BookDetailsModal } from "./book-details-modal";
 import { AddBookForm } from "./add-book-form";
-import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Autocomplete } from "./ui/autocomplete";
 import { Loader2, Search, X, Filter } from "lucide-react";
@@ -16,10 +18,95 @@ interface CatalogueTabProps {
   userName: string | null;
 }
 
+interface CatalogueGroup {
+  key: string;
+  primaryBook: Book;
+  copies: Book[];
+  ownerLabel: string;
+  statusLabel: string;
+}
+
+function buildOwnerLabel(copies: Book[]) {
+  const names = [...new Set(copies.map((book) => book.owner_name).filter(Boolean))] as string[];
+
+  if (names.length <= 2) {
+    return names.join(", ");
+  }
+
+  return `${names[0]}, ${names[1]} and ${names.length - 2} others`;
+}
+
+function buildStatusLabel(copies: Book[], userId: string | null) {
+  const availableCopies = copies.filter((book) => book.status === true);
+  const borrowableCopies = availableCopies.filter((book) => book.owner_id !== userId);
+  const ownedAvailableCopies = availableCopies.filter((book) => book.owner_id === userId);
+
+  if (borrowableCopies.length > 0) {
+    return "Available";
+  }
+
+  if (ownedAvailableCopies.length > 0) {
+    return "Owned";
+  }
+
+  return "Borrowed";
+}
+
+function groupBooks(books: Book[], userId: string | null) {
+  const groups = new Map<string, Book[]>();
+
+  books.forEach((book) => {
+    const key = `${book.title.trim().toLowerCase()}::${book.author.trim().toLowerCase()}`;
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.push(book);
+    } else {
+      groups.set(key, [book]);
+    }
+  });
+
+  return Array.from(groups.entries()).map(([key, copies]) => {
+    const sortedCopies = [...copies].sort((a, b) => {
+      if (a.status !== b.status) {
+        return a.status ? -1 : 1;
+      }
+
+      if (a.owner_id === userId && b.owner_id !== userId) {
+        return 1;
+      }
+
+      if (a.owner_id !== userId && b.owner_id === userId) {
+        return -1;
+      }
+
+      return 0;
+    });
+
+    return {
+      key,
+      primaryBook: {
+        ...sortedCopies[0],
+        owner_name: buildOwnerLabel(sortedCopies),
+        status: sortedCopies.some(
+          (book) => book.status === true && book.owner_id !== userId
+        )
+          ? true
+          : sortedCopies[0].status,
+      },
+      copies: sortedCopies,
+      ownerLabel: buildOwnerLabel(sortedCopies),
+      statusLabel: buildStatusLabel(sortedCopies, userId),
+    } satisfies CatalogueGroup;
+  });
+}
+
 export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
   const [books, setBooks] = useState<Book[]>([]);
+  const [groupedBooks, setGroupedBooks] = useState<CatalogueGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [selectedCopies, setSelectedCopies] = useState<Book[] | undefined>(undefined);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Filter states
@@ -68,11 +155,13 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
     if (error) {
       console.error("Error fetching books:", error);
     } else {
-      setBooks(data || []);
+      const resolvedBooks = await resolveBookCoverUrls(data || []);
+      setBooks(resolvedBooks);
+      setGroupedBooks(groupBooks(resolvedBooks, userId));
     }
 
     setLoading(false);
-  }, [searchQuery, selectedGenre, selectedOwner, availableOnly, supabase]);
+  }, [searchQuery, selectedGenre, selectedOwner, availableOnly, supabase, userId]);
 
   const fetchOwners = async () => {
     const { data } = await supabase
@@ -98,63 +187,67 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
     return () => clearTimeout(debounce);
   }, [searchQuery, selectedGenre, selectedOwner, availableOnly, fetchBooks]);
 
-  const trackInteraction = async (bookId: number, type: "click" | "borrow" | "return") => {
-    if (!userId) return;
-
-    await supabase.from("book_interactions").insert({
-      user_id: userId,
-      book_id: bookId,
-      interaction_type: type,
-    });
-  };
-
   const handleViewDetails = async (book: Book) => {
-    await trackInteraction(book.id, "click");
-    setSelectedBook(book);
+    const matchingGroup =
+      groupedBooks.find((group) => group.primaryBook.id === book.id) ||
+      groupedBooks.find(
+        (group) =>
+          group.primaryBook.title === book.title &&
+          group.primaryBook.author === book.author
+      );
+
+    if (userId && book.owner_id) {
+      await safeTrackBookClick(supabase, {
+        user_id: userId,
+        book_id: book.id,
+        owner_id: book.owner_id,
+        source: "catalogue",
+      });
+    }
+    setSelectedBook(matchingGroup?.primaryBook || book);
+    setSelectedCopies(matchingGroup?.copies);
   };
 
   const handleBorrow = async (bookId: number) => {
-    if (!userName) {
+    if (!userId || !userName) {
       alert("Please sign in to borrow books");
       return;
     }
 
-    const { error } = await supabase
-      .from("books")
-      .update({
-        status: false,
-        current_borrower: userName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", bookId);
+    const book = books.find((item) => item.id === bookId);
+    if (book?.owner_id === userId) {
+      alert("You cannot borrow your own book");
+      return;
+    }
+
+    const { error } = await updateBookBorrowState(supabase, bookId, {
+      status: false,
+      currentBorrowerId: userId,
+    });
 
     if (error) {
       alert("Failed to borrow book: " + error.message);
       return;
     }
 
-    await trackInteraction(bookId, "borrow");
     setSelectedBook(null);
+    setSelectedCopies(undefined);
     setRefreshTrigger((prev) => prev + 1);
   };
 
   const handleReturn = async (bookId: number) => {
-    const { error } = await supabase
-      .from("books")
-      .update({
-        status: true,
-        current_borrower: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", bookId);
+    const { error } = await updateBookBorrowState(supabase, bookId, {
+      status: true,
+      currentBorrowerId: null,
+    });
 
     if (error) {
       alert("Failed to return book: " + error.message);
       return;
     }
 
-    await trackInteraction(bookId, "return");
     setSelectedBook(null);
+    setSelectedCopies(undefined);
     setRefreshTrigger((prev) => prev + 1);
   };
 
@@ -270,16 +363,19 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : books.length > 0 ? (
+      ) : groupedBooks.length > 0 ? (
         <>
           <p className="text-sm text-muted-foreground">
-            {books.length} book{books.length !== 1 ? "s" : ""} found
+            {groupedBooks.length} book{groupedBooks.length !== 1 ? "s" : ""} found
           </p>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {books.map((book) => (
+            {groupedBooks.map((group) => (
               <BookCard
-                key={book.id}
-                book={book}
+                key={group.key}
+                book={group.primaryBook}
+                userId={userId}
+                ownerLabel={group.ownerLabel}
+                statusLabel={group.statusLabel}
                 onViewDetails={handleViewDetails}
               />
             ))}
@@ -303,7 +399,12 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
       {selectedBook && (
         <BookDetailsModal
           book={selectedBook}
-          onClose={() => setSelectedBook(null)}
+          userId={userId}
+          copies={selectedCopies}
+          onClose={() => {
+            setSelectedBook(null);
+            setSelectedCopies(undefined);
+          }}
           onBorrow={handleBorrow}
           onReturn={handleReturn}
         />

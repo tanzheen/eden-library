@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { updateBookBorrowState } from "@/lib/book-borrowing";
 import { createClient } from "@/lib/supabase/client";
 import { Book } from "@/lib/types";
+import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
 import { BookCard } from "./book-card";
 import { BookDetailsModal } from "./book-details-modal";
 import { Loader2, BookX } from "lucide-react";
 
 interface BookListProps {
   refreshTrigger?: number;
+  userId?: string | null;
 }
 
-export function BookList({ refreshTrigger }: BookListProps) {
+export function BookList({ refreshTrigger, userId }: BookListProps) {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +37,7 @@ export function BookList({ refreshTrigger }: BookListProps) {
       return;
     }
 
-    setBooks(data || []);
+    setBooks(await resolveBookCoverUrls(data || []));
     setLoading(false);
   };
 
@@ -46,14 +49,16 @@ export function BookList({ refreshTrigger }: BookListProps) {
     const borrowerName = prompt("Enter your name to borrow this book:");
     if (!borrowerName) return;
 
-    const { error: updateError } = await supabase
-      .from("books")
-      .update({
-        status: false,
-        current_borrower: borrowerName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", bookId);
+    const book = books.find((item) => item.id === bookId);
+    if (userId && book?.owner_id === userId) {
+      alert("You cannot borrow your own book");
+      return;
+    }
+
+    const { error: updateError } = await updateBookBorrowState(supabase, bookId, {
+      status: false,
+      currentBorrowerId: userId || null,
+    });
 
     if (updateError) {
       alert("Failed to borrow book: " + updateError.message);
@@ -65,14 +70,10 @@ export function BookList({ refreshTrigger }: BookListProps) {
   };
 
   const handleReturn = async (bookId: number) => {
-    const { error: updateError } = await supabase
-      .from("books")
-      .update({
-        status: true,
-        current_borrower: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", bookId);
+    const { error: updateError } = await updateBookBorrowState(supabase, bookId, {
+      status: true,
+      currentBorrowerId: null,
+    });
 
     if (updateError) {
       alert("Failed to return book: " + updateError.message);
@@ -127,6 +128,7 @@ export function BookList({ refreshTrigger }: BookListProps) {
           <BookCard
             key={book.id}
             book={book}
+            userId={userId || null}
             onViewDetails={handleViewDetails}
           />
         ))}
@@ -135,6 +137,7 @@ export function BookList({ refreshTrigger }: BookListProps) {
       {selectedBook && (
         <BookDetailsModal
           book={selectedBook}
+          userId={userId || null}
           onClose={() => setSelectedBook(null)}
           onBorrow={handleBorrow}
           onReturn={handleReturn}

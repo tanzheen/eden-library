@@ -14,7 +14,8 @@ export interface Book {
   updated_at: string;
   owner_name: string | null;
   owner_id: string | null;
-  current_borrower: string | null;
+  current_borrower?: string | null;
+  current_borrower_id?: string | null;
 }
 
 export interface BookInteraction {
