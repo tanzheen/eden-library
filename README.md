@@ -187,8 +187,8 @@ Example titles and topics noted so far:
 
 ## AI Librarian
 
-- Generate memories ordered from newest to oldest.
-- Filter by tags before running vector or FAISS-style similarity search.
+- Look at clicks and orders table to see what type of books the person reads
+- FAISS-style similarity search.
 - Return book recommendations based on both memory and semantic similarity.
 
 ## Database Notes
@@ -215,4 +215,8 @@ NOTE: embeddings are currently not working that well
 ## Future iterations 
 - need a "profiles" table to store whether the user is approved
 - need a "loans" table to track the history of who order from who
-- 
+
+
+## Book management 
+- manage your own books tab
+- being able to see your own books and delete them from the database if you want to remove them
