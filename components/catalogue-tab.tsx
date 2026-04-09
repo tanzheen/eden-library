@@ -102,6 +102,7 @@ function groupBooks(books: Book[], userId: string | null) {
 }
 
 export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
+  const PAGE_SIZE_OPTIONS = [8, 12, 16, 24];
   const [books, setBooks] = useState<Book[]>([]);
   const [groupedBooks, setGroupedBooks] = useState<CatalogueGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +117,8 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
   const [availableOnly, setAvailableOnly] = useState(false);
   const [owners, setOwners] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [booksPerPage, setBooksPerPage] = useState(12);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const supabase = createClient();
 
@@ -163,7 +166,7 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
     setLoading(false);
   }, [searchQuery, selectedGenre, selectedOwner, availableOnly, supabase, userId]);
 
-  const fetchOwners = async () => {
+  const fetchOwners = useCallback(async () => {
     const { data } = await supabase
       .from("books")
       .select("owner_name")
@@ -173,12 +176,12 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
       const uniqueOwners = [...new Set(data.map((d) => d.owner_name).filter(Boolean))] as string[];
       setOwners(uniqueOwners);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     fetchBooks();
     fetchOwners();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, fetchBooks, fetchOwners]);
 
   useEffect(() => {
     const debounce = setTimeout(() => {
@@ -186,6 +189,24 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
     }, 300);
     return () => clearTimeout(debounce);
   }, [searchQuery, selectedGenre, selectedOwner, availableOnly, fetchBooks]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedGenre, selectedOwner, availableOnly, booksPerPage]);
+
+  const totalPages = Math.max(1, Math.ceil(groupedBooks.length / booksPerPage));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const pageStartIndex = (currentPageSafe - 1) * booksPerPage;
+  const paginatedBooks = groupedBooks.slice(
+    pageStartIndex,
+    pageStartIndex + booksPerPage
+  );
+
+  useEffect(() => {
+    if (currentPage !== currentPageSafe) {
+      setCurrentPage(currentPageSafe);
+    }
+  }, [currentPage, currentPageSafe]);
 
   const handleViewDetails = async (book: Book) => {
     const matchingGroup =
@@ -351,11 +372,32 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
         </div>
       ) : groupedBooks.length > 0 ? (
         <>
-          <p className="text-sm text-muted-foreground">
-            {groupedBooks.length} book{groupedBooks.length !== 1 ? "s" : ""} found
-          </p>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {groupedBooks.map((group) => (
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              {groupedBooks.length} book{groupedBooks.length !== 1 ? "s" : ""} found
+              {" • "}Showing {pageStartIndex + 1}-
+              {Math.min(pageStartIndex + paginatedBooks.length, groupedBooks.length)}
+            </p>
+            <div className="flex items-center gap-3">
+              <label htmlFor="books-per-page" className="text-sm text-muted-foreground">
+                Books per page
+              </label>
+              <select
+                id="books-per-page"
+                value={booksPerPage}
+                onChange={(e) => setBooksPerPage(Number(e.target.value))}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {PAGE_SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
+            {paginatedBooks.map((group) => (
               <BookCard
                 key={group.key}
                 book={group.primaryBook}
@@ -365,6 +407,31 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
                 onViewDetails={handleViewDetails}
               />
             ))}
+          </div>
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Page {currentPageSafe} of {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPageSafe === 1}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
+                disabled={currentPageSafe === totalPages}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         </>
       ) : (
