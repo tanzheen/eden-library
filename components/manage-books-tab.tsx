@@ -50,6 +50,7 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
   const [ownedBooks, setOwnedBooks] = useState<Book[]>([]);
   const [requestedOrders, setRequestedOrders] = useState<OrderRecord[]>([]);
   const [borrowedOutOrders, setBorrowedOutOrders] = useState<OrderRecord[]>([]);
+  const [requestedByMeOrders, setRequestedByMeOrders] = useState<OrderRecord[]>([]);
   const [borrowedByMeOrders, setBorrowedByMeOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingBookId, setDeletingBookId] = useState<number | null>(null);
@@ -63,6 +64,7 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
       setOwnedBooks([]);
       setRequestedOrders([]);
       setBorrowedOutOrders([]);
+      setRequestedByMeOrders([]);
       setBorrowedByMeOrders([]);
       setLoading(false);
       return;
@@ -70,7 +72,7 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
 
     setLoading(true);
 
-    const [{ data: owned, error: ownedError }, { data: ownerOrders, error: ownerOrdersError }, { data: borrowedByMe, error: borrowedByMeError }] =
+    const [{ data: owned, error: ownedError }, { data: ownerOrders, error: ownerOrdersError }, { data: borrowerOrders, error: borrowerOrdersError }] =
       await Promise.all([
         supabase.from("books").select("*").eq("owner_id", userId).order("created_at", { ascending: false }),
         supabase
@@ -83,8 +85,8 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
           .from("orders")
           .select("id, book_id, owner_id, borrower_id, status, book:books(*)")
           .eq("borrower_id", userId)
-          .eq("status", "borrowed")
-          .order("borrowed_at", { ascending: false }),
+          .in("status", ["requested", "borrowed"])
+          .order("created_at", { ascending: false }),
       ]);
 
     if (ownedError) {
@@ -120,12 +122,13 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
       );
     }
 
-    if (borrowedByMeError) {
-      console.error("Failed to fetch borrowed orders:", borrowedByMeError);
+    if (borrowerOrdersError) {
+      console.error("Failed to fetch borrower orders:", borrowerOrdersError);
+      setRequestedByMeOrders([]);
       setBorrowedByMeOrders([]);
     } else {
-      const resolvedBorrowedOrders = await Promise.all(
-        ((borrowedByMe || []) as RawOrderRecord[]).map(async (rawOrder) => {
+      const resolvedBorrowerOrders = await Promise.all(
+        ((borrowerOrders || []) as RawOrderRecord[]).map(async (rawOrder) => {
           const order = normalizeOrderRecord(rawOrder);
 
           return {
@@ -137,7 +140,12 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
         })
       );
 
-      setBorrowedByMeOrders(resolvedBorrowedOrders);
+      setRequestedByMeOrders(
+        resolvedBorrowerOrders.filter((order) => order.status === "requested")
+      );
+      setBorrowedByMeOrders(
+        resolvedBorrowerOrders.filter((order) => order.status === "borrowed")
+      );
     }
 
     setLoading(false);
@@ -349,6 +357,76 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
                 </div>
               );
             })}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Inbox className="h-5 w-5 text-amber-500" />
+          <div>
+            <h2 className="text-xl font-bold">Requested By You</h2>
+            <p className="text-sm text-muted-foreground">
+              Books you requested that are still waiting for the owner&apos;s approval.
+            </p>
+          </div>
+        </div>
+
+        {requestedByMeOrders.length === 0 ? (
+          <div className="rounded-xl border border-border bg-muted/30 p-8 text-center text-muted-foreground">
+            You do not have any outgoing requests awaiting approval.
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {requestedByMeOrders.map((order) => (
+              <div
+                key={order.id}
+                className="rounded-xl border border-border bg-card p-4 shadow-sm"
+              >
+                <div className="flex gap-4">
+                  <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                    {order.book?.cover_url ? (
+                      <BookCoverImage
+                        src={order.book.cover_url}
+                        alt={`Cover of ${order.book.title}`}
+                        className="object-contain"
+                        sizes="80px"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                        <BookOpen className="h-7 w-7 opacity-40" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => order.book && setSelectedBook(order.book)}
+                        className="text-left font-semibold text-foreground hover:text-blue-600"
+                      >
+                        {order.book?.title || "Unknown book"}
+                      </button>
+                      <p className="text-sm text-muted-foreground">
+                        by {order.book?.author || "Unknown author"}
+                      </p>
+                    </div>
+
+                    <p className="text-sm text-muted-foreground">
+                      Owned by{" "}
+                      <span className="font-medium text-foreground">
+                        {order.book?.owner_name || "Unknown owner"}
+                      </span>
+                    </p>
+
+                    <div className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                      Awaiting approval
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>

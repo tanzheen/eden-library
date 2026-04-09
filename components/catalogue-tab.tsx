@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeTrackBookClick } from "@/lib/book-clicks";
 import { requestBorrow } from "@/lib/book-orders";
@@ -103,6 +103,7 @@ function groupBooks(books: Book[], userId: string | null) {
 
 export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
   const PAGE_SIZE_OPTIONS = [8, 12, 16, 24];
+  const topAnchorRef = useRef<HTMLDivElement | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
   const [groupedBooks, setGroupedBooks] = useState<CatalogueGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,6 +209,46 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
     }
   }, [currentPage, currentPageSafe]);
 
+  const changePage = (nextPage: number) => {
+    const boundedPage = Math.min(Math.max(nextPage, 1), totalPages);
+
+    if (boundedPage === currentPageSafe) {
+      return;
+    }
+
+    setCurrentPage(boundedPage);
+    topAnchorRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const paginationControls = (
+    <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">
+        Page {currentPageSafe} of {totalPages}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => changePage(currentPageSafe - 1)}
+          disabled={currentPageSafe === 1}
+        >
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => changePage(currentPageSafe + 1)}
+          disabled={currentPageSafe === totalPages}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+
   const handleViewDetails = async (book: Book) => {
     const matchingGroup =
       groupedBooks.find((group) => group.primaryBook.id === book.id) ||
@@ -269,6 +310,7 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
 
   return (
     <div className="space-y-6">
+      <div ref={topAnchorRef} />
       {/* Search and Filter Bar */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -396,6 +438,7 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
               </select>
             </div>
           </div>
+          {paginationControls}
           <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
             {paginatedBooks.map((group) => (
               <BookCard
@@ -408,31 +451,7 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
               />
             ))}
           </div>
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              Page {currentPageSafe} of {totalPages}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPageSafe === 1}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage((page) => Math.min(totalPages, page + 1))
-                }
-                disabled={currentPageSafe === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          {paginationControls}
         </>
       ) : (
         <div className="text-center py-12">
