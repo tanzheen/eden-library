@@ -17,11 +17,11 @@ export function TabNavigation({
 }: TabNavigationProps) {
   return (
     <div className="w-full border-b border-border bg-background sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="flex gap-1">
+      <div className="max-w-6xl mx-auto overflow-x-auto px-4">
+        <div className="flex min-w-max gap-1">
           <button
             onClick={() => onTabChange("home")}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "home"
                 ? "border-blue-600 text-blue-600"
                 : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
@@ -32,7 +32,7 @@ export function TabNavigation({
           </button>
           <button
             onClick={() => onTabChange("catalogue")}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "catalogue"
                 ? "border-blue-600 text-blue-600"
                 : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
@@ -44,7 +44,7 @@ export function TabNavigation({
           {showAssistantTab && (
             <button
               onClick={() => onTabChange("assistant")}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === "assistant"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
@@ -57,7 +57,7 @@ export function TabNavigation({
           {showManageTab && (
             <button
               onClick={() => onTabChange("manage")}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === "manage"
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"

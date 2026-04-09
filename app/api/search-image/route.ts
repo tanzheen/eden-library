@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const result = await tavilyClient.search(
       `${title} by ${author} book cover`,
       {
-        searchDepth: "basic",
+        searchDepth: "fast",
         includeImages: true,
         includeAnswer: false,
         maxResults: 5,
