@@ -3,11 +3,28 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ThemeSwitcher } from "./theme-switcher";
 import { Button } from "./ui/button";
-import { LogoutButton } from "./logout-button";
+import { UserProfileMenu } from "./user-profile-menu";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function HeaderBanner() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  let initialTelehandle: string | null = null;
+
+  if (user) {
+    try {
+      const adminClient = createAdminClient();
+      const { data } = await adminClient
+        .from("tele_users")
+        .select("telehandle")
+        .eq("owner_id", user.id)
+        .maybeSingle();
+
+      initialTelehandle = data?.telehandle ?? null;
+    } catch (error) {
+      console.error("Failed to load telehandle:", error);
+    }
+  }
 
   return (
     <header className="relative w-full">
@@ -40,7 +57,13 @@ export async function HeaderBanner() {
                 <span className="text-sm text-muted-foreground hidden sm:inline">
                   {user.user_metadata?.full_name || user.email}
                 </span>
-                <LogoutButton />
+                <UserProfileMenu
+                  user={{
+                    email: user.email ?? undefined,
+                    user_metadata: user.user_metadata,
+                  }}
+                  initialTelehandle={initialTelehandle}
+                />
               </div>
             ) : (
               <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700">
