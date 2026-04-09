@@ -131,14 +131,23 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
       setRequestedOrders(pendingOrders);
       setBorrowedOutOrders(borrowedOrders);
 
-      // Resolve borrower names for pending requests (borrower_id is a UUID)
-      const pendingBorrowerIds = [...new Set(pendingOrders.map((o) => o.borrower_id))];
-      if (pendingBorrowerIds.length > 0) {
+      // Resolve borrower names — use current_borrower_id from books + borrower_id from orders
+      const ownedBookBorrowerIds = ((owned || []) as Book[])
+        .map((b) => b.current_borrower_id)
+        .filter(Boolean) as string[];
+      const allBorrowerIds = [
+        ...new Set([
+          ...pendingOrders.map((o) => o.borrower_id),
+          ...borrowedOrders.map((o) => o.borrower_id),
+          ...ownedBookBorrowerIds,
+        ]),
+      ];
+      if (allBorrowerIds.length > 0) {
         try {
           const res = await fetch("/api/resolve-users", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userIds: pendingBorrowerIds }),
+            body: JSON.stringify({ userIds: allBorrowerIds }),
           });
           if (res.ok) {
             const { names } = await res.json();
@@ -410,7 +419,7 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
                         <p className="text-sm text-muted-foreground">
                           Borrowed by{" "}
                           <span className="font-medium text-foreground">
-                            {order.book?.current_borrower || order.borrower_id}
+                            {borrowerNames[order.borrower_id] || order.book?.current_borrower || order.borrower_id}
                           </span>
                         </p>
                         <Button
@@ -670,7 +679,7 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
                           <p className="text-sm text-muted-foreground">by {book.author}</p>
                           <p className="text-sm text-muted-foreground">
                             {activeBorrow
-                              ? `Currently borrowed by ${book.current_borrower || activeBorrow.borrower_id}`
+                              ? `Currently borrowed by ${borrowerNames[activeBorrow.borrower_id] || book.current_borrower || activeBorrow.borrower_id}`
                               : "Available"}
                           </p>
                         </div>
