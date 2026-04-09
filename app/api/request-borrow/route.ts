@@ -61,12 +61,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Fetch borrower and owner names
+    const [{ data: borrowerAuth }, { data: ownerAuth }] = await Promise.all([
+      admin.auth.admin.getUserById(user.id),
+      admin.auth.admin.getUserById(book.owner_id),
+    ]);
+
+    const borrowerName =
+      borrowerAuth?.user?.user_metadata?.full_name ||
+      borrowerAuth?.user?.email ||
+      null;
+
+    const ownerName =
+      ownerAuth?.user?.user_metadata?.full_name ||
+      ownerAuth?.user?.email ||
+      null;
+
     const { data: createdOrder, error: createError } = await admin
       .from("orders")
       .insert({
         book_id: bookId,
         owner_id: book.owner_id,
         borrower_id: user.id,
+        owner_name: ownerName,
+        borrower_name: borrowerName,
         status: "requested",
       })
       .select()
@@ -85,15 +103,9 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (teleUser?.chat_id) {
-        const { data: borrowerAuth } = await admin.auth.admin.getUserById(user.id);
-        const borrowerName =
-          borrowerAuth?.user?.user_metadata?.full_name ||
-          borrowerAuth?.user?.email ||
-          "Someone";
-
         await sendTelegramMessage(
           teleUser.chat_id,
-          borrowRequestMessage(borrowerName, book.title)
+          borrowRequestMessage(borrowerName || "Someone", book.title)
         );
       }
     } catch (notifyErr) {

@@ -1,17 +1,20 @@
+import { Bot } from "grammy";
+
 const APP_URL = "https://v0-church-book-exchange-gmlcwilf7jb.vercel.app/";
 
-export async function sendTelegramMessage(chatId: number, text: string) {
+function getBot() {
   const token = process.env.BOT_TOKEN;
-  if (!token) return;
+  if (!token) return null;
+  return new Bot(token);
+}
 
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
-  });
+export async function sendTelegramMessage(chatId: number, text: string) {
+  const bot = getBot();
+  if (!bot) return;
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
+  try {
+    await bot.api.sendMessage(chatId, text, { parse_mode: "HTML" });
+  } catch (err) {
     console.error("Telegram sendMessage failed:", err);
   }
 }

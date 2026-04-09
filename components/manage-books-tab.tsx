@@ -20,6 +20,9 @@ interface OrderRecord {
   book_id: number;
   owner_id: string;
   borrower_id: string;
+  owner_name: string | null;
+  borrower_name: string | null;
+  note: string | null;
   status: "requested" | "borrowed" | "returned" | "cancelled";
   book?: Book;
 }
@@ -29,6 +32,9 @@ interface RawOrderRecord {
   book_id: number;
   owner_id: string;
   borrower_id: string;
+  owner_name: string | null;
+  borrower_name: string | null;
+  note: string | null;
   status: "requested" | "borrowed" | "returned" | "cancelled";
   book?: Book | Book[] | null;
 }
@@ -41,6 +47,9 @@ function normalizeOrderRecord(order: RawOrderRecord): OrderRecord {
     book_id: order.book_id,
     owner_id: order.owner_id,
     borrower_id: order.borrower_id,
+    owner_name: order.owner_name,
+    borrower_name: order.borrower_name,
+    note: order.note,
     status: order.status,
     book: normalizedBook || undefined,
   };
@@ -56,7 +65,6 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
   const [deletingBookId, setDeletingBookId] = useState<number | null>(null);
   const [actingOrderId, setActingOrderId] = useState<number | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
-  const [borrowerNames, setBorrowerNames] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState({
     pendingRequests: true,
     loanedOut: true,
@@ -88,13 +96,13 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
         supabase.from("books").select("*").eq("owner_id", userId).order("created_at", { ascending: false }),
         supabase
           .from("orders")
-          .select("id, book_id, owner_id, borrower_id, status, book:books(*)")
+          .select("id, book_id, owner_id, borrower_id, owner_name, borrower_name, note, status, book:books(*)")
           .eq("owner_id", userId)
           .in("status", ["requested", "borrowed"])
           .order("created_at", { ascending: false }),
         supabase
           .from("orders")
-          .select("id, book_id, owner_id, borrower_id, status, book:books(*)")
+          .select("id, book_id, owner_id, borrower_id, owner_name, borrower_name, note, status, book:books(*)")
           .eq("borrower_id", userId)
           .in("status", ["requested", "borrowed"])
           .order("created_at", { ascending: false }),
@@ -130,35 +138,6 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
 
       setRequestedOrders(pendingOrders);
       setBorrowedOutOrders(borrowedOrders);
-
-      // Resolve borrower names — use current_borrower_id from books + borrower_id from orders
-      const ownedBookBorrowerIds = ((owned || []) as Book[])
-        .map((b) => b.current_borrower_id)
-        .filter(Boolean) as string[];
-      const allBorrowerIds = [
-        ...new Set([
-          ...pendingOrders.map((o) => o.borrower_id),
-          ...borrowedOrders.map((o) => o.borrower_id),
-          ...ownedBookBorrowerIds,
-        ]),
-      ];
-      if (allBorrowerIds.length > 0) {
-        try {
-          const res = await fetch("/api/resolve-users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userIds: allBorrowerIds }),
-          });
-          const json = await res.json();
-          if (res.ok) {
-            setBorrowerNames((prev) => ({ ...prev, ...json.names }));
-          } else {
-            console.error("resolve-users failed:", json);
-          }
-        } catch (err) {
-          console.error("resolve-users fetch error:", err);
-        }
-      }
     }
 
     if (borrowerOrdersError) {
@@ -334,9 +313,14 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
                         <p className="text-sm text-muted-foreground">
                           Requested by{" "}
                           <span className="font-medium text-foreground">
-                            {borrowerNames[order.borrower_id] || order.borrower_id}
+                            {order.borrower_name || "Unknown"}
                           </span>
                         </p>
+                        {order.note && (
+                          <p className="mt-2 text-sm text-muted-foreground italic">
+                            &quot;{order.note}&quot;
+                          </p>
+                        )}
                       </div>
                       <Button
                         onClick={() => handleApproveOrder(order.id)}
@@ -421,7 +405,7 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
                         <p className="text-sm text-muted-foreground">
                           Borrowed by{" "}
                           <span className="font-medium text-foreground">
-                            {borrowerNames[order.borrower_id] || order.book?.current_borrower || order.borrower_id}
+                            {order.borrower_name || "Unknown"}
                           </span>
                         </p>
                         <Button
@@ -681,7 +665,7 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
                           <p className="text-sm text-muted-foreground">by {book.author}</p>
                           <p className="text-sm text-muted-foreground">
                             {activeBorrow
-                              ? `Currently borrowed by ${borrowerNames[activeBorrow.borrower_id] || book.current_borrower || activeBorrow.borrower_id}`
+                              ? `Currently borrowed by ${activeBorrow.borrower_name || "Unknown"}`
                               : "Available"}
                           </p>
                         </div>
