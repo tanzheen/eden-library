@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendTelegramMessage, borrowRequestMessage } from "@/lib/telegram";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     const { data: book, error: bookError } = await admin
       .from("books")
-      .select("id, owner_id, status")
+      .select("id, owner_id, status, title")
       .eq("id", bookId)
       .single();
 
@@ -73,6 +74,30 @@ export async function POST(request: NextRequest) {
 
     if (createError) {
       return NextResponse.json({ error: createError.message }, { status: 500 });
+    }
+
+    // Notify the owner via Telegram (best-effort)
+    try {
+      const { data: teleUser } = await admin
+        .from("tele_users")
+        .select("chat_id")
+        .eq("owner_id", book.owner_id)
+        .maybeSingle();
+
+      if (teleUser?.chat_id) {
+        const { data: borrowerAuth } = await admin.auth.admin.getUserById(user.id);
+        const borrowerName =
+          borrowerAuth?.user?.user_metadata?.full_name ||
+          borrowerAuth?.user?.email ||
+          "Someone";
+
+        await sendTelegramMessage(
+          teleUser.chat_id,
+          borrowRequestMessage(borrowerName, book.title)
+        );
+      }
+    } catch (notifyErr) {
+      console.error("Failed to send borrow request notification:", notifyErr);
     }
 
     return NextResponse.json({ order: createdOrder });

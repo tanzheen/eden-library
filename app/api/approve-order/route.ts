@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendTelegramMessage, borrowApprovedMessage } from "@/lib/telegram";
 
 export async function POST(request: NextRequest) {
   try {
@@ -93,6 +94,35 @@ export async function POST(request: NextRequest) {
         { error: updateBookError.message },
         { status: 500 }
       );
+    }
+
+    // Notify the borrower via Telegram (best-effort)
+    try {
+      const { data: borrowerTeleUser } = await admin
+        .from("tele_users")
+        .select("chat_id")
+        .eq("owner_id", order.borrower_id)
+        .maybeSingle();
+
+      if (borrowerTeleUser?.chat_id) {
+        const { data: bookData } = await admin
+          .from("books")
+          .select("title")
+          .eq("id", order.book_id)
+          .single();
+
+        const ownerName =
+          user.user_metadata?.full_name ||
+          user.email ||
+          "The owner";
+
+        await sendTelegramMessage(
+          borrowerTeleUser.chat_id,
+          borrowApprovedMessage(ownerName, bookData?.title ?? "the book")
+        );
+      }
+    } catch (notifyErr) {
+      console.error("Failed to send approval notification:", notifyErr);
     }
 
     return NextResponse.json({ success: true });
