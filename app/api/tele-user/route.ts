@@ -60,23 +60,66 @@ export async function PUT(request: Request) {
     );
   }
 
-  const { data, error } = await adminClient
+  const { data: existingTeleUser, error: lookupError } = await adminClient
     .from("tele_users")
-    .upsert(
-      {
+    .select("telehandle, owner_id")
+    .eq("telehandle", telehandle)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error("Failed to look up telehandle:", lookupError);
+    return NextResponse.json({ error: lookupError.message }, { status: 500 });
+  }
+
+  if (
+    existingTeleUser?.owner_id &&
+    existingTeleUser.owner_id !== user.id
+  ) {
+    return NextResponse.json(
+      { error: "This telehandle is already linked to another account" },
+      { status: 409 }
+    );
+  }
+
+  let data;
+  let error;
+
+  if (existingTeleUser) {
+    ({ data, error } = await adminClient
+      .from("tele_users")
+      .update({
         owner_id: user.id,
         telehandle,
-      },
-      {
-        onConflict: "owner_id",
-      }
-    )
-    .select("owner_id, telehandle")
-    .single();
+      })
+      .eq("telehandle", existingTeleUser.telehandle)
+      .select("owner_id, telehandle")
+      .single());
+  } else {
+    ({ data, error } = await adminClient
+      .from("tele_users")
+      .upsert(
+        {
+          owner_id: user.id,
+          telehandle,
+        },
+        {
+          onConflict: "owner_id",
+        }
+      )
+      .select("owner_id, telehandle")
+      .single());
+  }
 
   if (error) {
     console.error("Failed to upsert telehandle:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!data) {
+    return NextResponse.json(
+      { error: "Failed to save telehandle" },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({
