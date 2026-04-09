@@ -149,12 +149,14 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userIds: allBorrowerIds }),
           });
+          const json = await res.json();
           if (res.ok) {
-            const { names } = await res.json();
-            setBorrowerNames((prev) => ({ ...prev, ...names }));
+            setBorrowerNames((prev) => ({ ...prev, ...json.names }));
+          } else {
+            console.error("resolve-users failed:", json);
           }
-        } catch {
-          // silently ignore — fall back to ID display
+        } catch (err) {
+          console.error("resolve-users fetch error:", err);
         }
       }
     }
