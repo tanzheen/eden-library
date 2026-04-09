@@ -100,11 +100,11 @@ export async function POST(request: NextRequest) {
     try {
       const { data: borrowerTeleUser } = await admin
         .from("tele_users")
-        .select("chat_id")
+        .select("user_id")
         .eq("owner_id", order.borrower_id)
         .maybeSingle();
 
-      if (borrowerTeleUser?.chat_id) {
+      if (borrowerTeleUser?.user_id) {
         const { data: bookData } = await admin
           .from("books")
           .select("title")
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
           "The owner";
 
         await sendTelegramMessage(
-          borrowerTeleUser.chat_id,
+          borrowerTeleUser.user_id,
           borrowApprovedMessage(ownerName, bookData?.title ?? "the book")
         );
       }

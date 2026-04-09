@@ -98,13 +98,13 @@ export async function POST(request: NextRequest) {
     try {
       const { data: teleUser } = await admin
         .from("tele_users")
-        .select("chat_id")
+        .select("user_id")
         .eq("owner_id", book.owner_id)
         .maybeSingle();
 
-      if (teleUser?.chat_id) {
+      if (teleUser?.user_id) {
         await sendTelegramMessage(
-          teleUser.chat_id,
+          teleUser.user_id,
           borrowRequestMessage(borrowerName || "Someone", book.title)
         );
       }
