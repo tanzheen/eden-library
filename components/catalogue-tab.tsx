@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeTrackBookClick } from "@/lib/book-clicks";
 import { requestBorrow } from "@/lib/book-orders";
-import { Book, GENRE_TAGS } from "@/lib/types";
+import { Book, GENRE_TAGS, DIFFICULTY_OPTIONS, PURPOSE_OPTIONS } from "@/lib/types";
 import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
 import { BookCard } from "./book-card";
 import { BookDetailsModal } from "./book-details-modal";
@@ -114,6 +114,8 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGenre, setSelectedGenre] = useState<string>("");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("");
+  const [selectedPurpose, setSelectedPurpose] = useState<string>("");
   const [selectedOwner, setSelectedOwner] = useState<string>("");
   const [availableOnly, setAvailableOnly] = useState(false);
   const [owners, setOwners] = useState<string[]>([]);
@@ -142,6 +144,16 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
       query = query.eq("genre_tag", selectedGenre);
     }
 
+    // Apply difficulty filter
+    if (selectedDifficulty) {
+      query = query.eq("difficulty", selectedDifficulty);
+    }
+
+    // Apply purpose filter
+    if (selectedPurpose) {
+      query = query.eq("purpose", selectedPurpose);
+    }
+
     // Apply owner filter
     if (selectedOwner) {
       query = query.eq("owner_name", selectedOwner);
@@ -165,7 +177,7 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
     }
 
     setLoading(false);
-  }, [searchQuery, selectedGenre, selectedOwner, availableOnly, supabase, userId]);
+  }, [searchQuery, selectedGenre, selectedDifficulty, selectedPurpose, selectedOwner, availableOnly, supabase, userId]);
 
   const fetchOwners = useCallback(async () => {
     const { data } = await supabase
@@ -189,11 +201,11 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
       fetchBooks();
     }, 300);
     return () => clearTimeout(debounce);
-  }, [searchQuery, selectedGenre, selectedOwner, availableOnly, fetchBooks]);
+  }, [searchQuery, selectedGenre, selectedDifficulty, selectedPurpose, selectedOwner, availableOnly, fetchBooks]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedGenre, selectedOwner, availableOnly, booksPerPage]);
+  }, [searchQuery, selectedGenre, selectedDifficulty, selectedPurpose, selectedOwner, availableOnly, booksPerPage]);
 
   const totalPages = Math.max(1, Math.ceil(groupedBooks.length / booksPerPage));
   const currentPageSafe = Math.min(currentPage, totalPages);
@@ -302,11 +314,13 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
   const clearFilters = () => {
     setSearchQuery("");
     setSelectedGenre("");
+    setSelectedDifficulty("");
+    setSelectedPurpose("");
     setSelectedOwner("");
     setAvailableOnly(false);
   };
 
-  const hasActiveFilters = searchQuery || selectedGenre || selectedOwner || availableOnly;
+  const hasActiveFilters = searchQuery || selectedGenre || selectedDifficulty || selectedPurpose || selectedOwner || availableOnly;
 
   return (
     <div className="space-y-6">
@@ -350,7 +364,7 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
         {/* Expanded Filters */}
         {showFilters && (
           <div className="bg-muted/50 rounded-lg p-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Genre</label>
                 <select
@@ -362,6 +376,36 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
                   {GENRE_TAGS.map((genre) => (
                     <option key={genre} value={genre}>
                       {genre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Difficulty</label>
+                <select
+                  value={selectedDifficulty}
+                  onChange={(e) => setSelectedDifficulty(e.target.value)}
+                  className="w-full h-9 px-3 py-1 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">All Difficulties</option>
+                  {DIFFICULTY_OPTIONS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Purpose</label>
+                <select
+                  value={selectedPurpose}
+                  onChange={(e) => setSelectedPurpose(e.target.value)}
+                  className="w-full h-9 px-3 py-1 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">All Purposes</option>
+                  {PURPOSE_OPTIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
                     </option>
                   ))}
                 </select>

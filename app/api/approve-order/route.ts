@@ -72,11 +72,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: borrowerUser } = await admin.auth.admin.getUserById(order.borrower_id);
+    const borrowerName =
+      borrowerUser?.user?.user_metadata?.full_name ||
+      borrowerUser?.user?.email ||
+      null;
+
     const { error: updateBookError } = await admin
       .from("books")
       .update({
         status: false,
         current_borrower_id: order.borrower_id,
+        current_borrower: borrowerName,
         updated_at: new Date().toISOString(),
       })
       .eq("id", order.book_id);

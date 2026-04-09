@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       .update({
         status: true,
         current_borrower_id: null,
+        current_borrower: null,
         updated_at: now,
       })
       .eq("id", order.book_id);
