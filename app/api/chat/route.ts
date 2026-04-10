@@ -64,7 +64,7 @@ export async function POST(req: Request) {
           const embedding = await embedQuery(query);
           const { data, error } = await supabase.rpc("match_books", {
             query_embedding: embedding,
-            match_threshold: 0.7,
+            match_threshold: 0.5,
             match_count: 10,
           });
           if (error) throw new Error(error.message);
