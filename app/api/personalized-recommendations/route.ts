@@ -6,6 +6,7 @@ import {
   cosineSimilarity,
   parseEmbedding,
 } from "@/lib/embedding-utils";
+import { isClicksTableMissing } from "@/lib/book-clicks";
 
 interface BookRecord {
   id: number;
@@ -39,7 +40,7 @@ export async function GET() {
 
     const admin = createAdminClient();
 
-    const [{ data: recentClicks, error: clicksError }, { data: recentOrders, error: ordersError }] =
+    const [{ data: recentClicksRaw, error: clicksError }, recentOrdersResult] =
       await Promise.all([
         admin
           .from("clicks")
@@ -56,8 +57,26 @@ export async function GET() {
           .limit(2),
       ]);
 
-    if (clicksError) {
+    const recentClicks = isClicksTableMissing(clicksError) ? [] : recentClicksRaw || [];
+
+    if (clicksError && !isClicksTableMissing(clicksError)) {
       return NextResponse.json({ error: clicksError.message }, { status: 500 });
+    }
+
+    let recentOrders = recentOrdersResult.data || [];
+    let ordersError = recentOrdersResult.error;
+
+    if (ordersError && ordersError.message?.includes("created_at")) {
+      console.warn("Falling back to unordered recent orders query:", ordersError.message);
+      const fallbackOrdersResult = await admin
+        .from("orders")
+        .select("book_id")
+        .eq("borrower_id", user.id)
+        .in("status", ["requested", "borrowed", "returned"])
+        .limit(2);
+
+      recentOrders = fallbackOrdersResult.data || [];
+      ordersError = fallbackOrdersResult.error;
     }
 
     if (ordersError) {
@@ -66,8 +85,8 @@ export async function GET() {
 
     const sourceBookIds = [
       ...new Set([
-        ...(recentClicks || []).map((row) => row.book_id),
-        ...(recentOrders || []).map((row) => row.book_id),
+        ...recentClicks.map((row) => row.book_id),
+        ...recentOrders.map((row) => row.book_id),
       ]),
     ];
 
@@ -185,8 +204,8 @@ export async function GET() {
     return NextResponse.json({
       recommendations: rankedBooks,
       debug: {
-        clickSeeds: (recentClicks || []).length,
-        orderSeeds: (recentOrders || []).length,
+        clickSeeds: recentClicks.length,
+        orderSeeds: recentOrders.length,
         sourceEmbeddings: sourceEmbeddings.length,
       },
     });

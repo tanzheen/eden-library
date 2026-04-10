@@ -13,6 +13,41 @@ interface OrderRow {
   status: "requested" | "borrowed" | "returned" | "cancelled";
 }
 
+function isMissingColumnError(message?: string) {
+  return message?.includes("column") || message?.includes("Could not find") || false;
+}
+
+async function fetchOrdersForUser(
+  admin: ReturnType<typeof createAdminClient>,
+  matchColumn: "owner_id" | "borrower_id",
+  userId: string
+) {
+  const baseSelect = "id, book_id, owner_id, borrower_id, owner_name, borrower_name, status";
+
+  const orderedQuery = await admin
+    .from("orders")
+    .select(baseSelect)
+    .eq(matchColumn, userId)
+    .in("status", ["requested", "borrowed"])
+    .order("created_at", { ascending: false });
+
+  if (!orderedQuery.error) {
+    return orderedQuery;
+  }
+
+  if (!isMissingColumnError(orderedQuery.error.message)) {
+    return orderedQuery;
+  }
+
+  console.warn(`Falling back to unordered orders query for ${matchColumn}:`, orderedQuery.error.message);
+
+  return admin
+    .from("orders")
+    .select(baseSelect)
+    .eq(matchColumn, userId)
+    .in("status", ["requested", "borrowed"]);
+}
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -26,29 +61,18 @@ export async function GET() {
 
     const admin = createAdminClient();
 
-    const [
-      { data: ownedBooks, error: ownedError },
-      { data: ownerOrders, error: ownerOrdersError },
-      { data: borrowerOrders, error: borrowerOrdersError },
-    ] = await Promise.all([
+    const [{ data: ownedBooks, error: ownedError }, ownerOrdersResult, borrowerOrdersResult] = await Promise.all([
       admin
         .from("books")
         .select("*")
         .eq("owner_id", user.id)
         .order("created_at", { ascending: false }),
-      admin
-        .from("orders")
-        .select("id, book_id, owner_id, borrower_id, owner_name, borrower_name, note, status")
-        .eq("owner_id", user.id)
-        .in("status", ["requested", "borrowed"])
-        .order("created_at", { ascending: false }),
-      admin
-        .from("orders")
-        .select("id, book_id, owner_id, borrower_id, owner_name, borrower_name, note, status")
-        .eq("borrower_id", user.id)
-        .in("status", ["requested", "borrowed"])
-        .order("created_at", { ascending: false }),
+      fetchOrdersForUser(admin, "owner_id", user.id),
+      fetchOrdersForUser(admin, "borrower_id", user.id),
     ]);
+
+    const { data: ownerOrders, error: ownerOrdersError } = ownerOrdersResult;
+    const { data: borrowerOrders, error: borrowerOrdersError } = borrowerOrdersResult;
 
     if (ownedError || ownerOrdersError || borrowerOrdersError) {
       return NextResponse.json(

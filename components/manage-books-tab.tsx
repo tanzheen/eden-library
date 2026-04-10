@@ -33,7 +33,7 @@ interface RawOrderRecord {
   borrower_id: string;
   owner_name: string | null;
   borrower_name: string | null;
-  note: string | null;
+  note?: string | null;
   status: "requested" | "borrowed" | "returned" | "cancelled";
   book?: Book | Book[] | null;
 }
