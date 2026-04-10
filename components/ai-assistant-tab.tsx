@@ -56,7 +56,12 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
     () => new DefaultChatTransport({ api: "/api/chat" }),
     []
   );
-  const { messages, sendMessage, status } = useChat({ transport });
+  const { messages, sendMessage, status, error } = useChat({
+    transport,
+    onError: (err) => {
+      console.error("Chat error:", err);
+    },
+  });
 
   const isLoading = status === "streaming" || status === "submitted";
 
@@ -236,6 +241,12 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
               <Loader2 className="h-4 w-4 animate-spin" />
               Searching the shelves...
             </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+            Something went wrong. Please try again.
           </div>
         )}
 

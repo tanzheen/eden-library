@@ -1,5 +1,5 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { streamText, tool, stepCountIs } from "ai";
+import { streamText, tool, stepCountIs, convertToModelMessages } from "ai";
 import { z } from "zod";
 import { embedQuery } from "@/lib/embed";
 import { createClient } from "@/lib/supabase/server";
@@ -25,8 +25,11 @@ SELECTED_IDS: [id1, id2, id3]
 where the IDs match the books you actually recommended. Do not include this line if you did not call searchBooks.`;
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const { messages: uiMessages } = await req.json();
   const supabase = await createClient();
+
+  // Convert UI messages to model messages
+  const messages = await convertToModelMessages(uiMessages);
 
   const result = streamText({
     model: google("gemma-4-26b-a4b-it"),
