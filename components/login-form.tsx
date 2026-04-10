@@ -11,13 +11,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
-  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +23,8 @@ export function LoginForm({
     const supabase = createClient();
     setIsLoading(true);
     setError(null);
-    const nextPath = searchParams.get("next") || "/";
+    const params = new URLSearchParams(window.location.search);
+    const nextPath = params.get("next") || "/";
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -39,7 +38,7 @@ export function LoginForm({
       setError(error instanceof Error ? error.message : "An error occurred");
       setIsLoading(false);
     }
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     handleGoogleLogin();
