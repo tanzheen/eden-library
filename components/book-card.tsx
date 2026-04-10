@@ -2,6 +2,8 @@
 
 import { Book } from "@/lib/types";
 import { User, BookOpen } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { buildLoginPath, getCurrentPath } from "@/lib/auth-redirect";
 import { BookCoverImage } from "./book-cover-image";
 
 interface BookCardProps {
@@ -19,6 +21,7 @@ export function BookCard({
   statusLabel,
   onViewDetails,
 }: BookCardProps) {
+  const router = useRouter();
   const isAvailable = book.status === true;
   const isOwnedByViewer = Boolean(userId && book.owner_id === userId);
   const tags = [book.genre_tag, book.difficulty, book.purpose].filter(
@@ -31,7 +34,13 @@ export function BookCard({
   return (
     <button
       type="button"
-      onClick={() => onViewDetails(book)}
+      onClick={() => {
+        if (!userId) {
+          router.push(buildLoginPath(getCurrentPath()));
+          return;
+        }
+        onViewDetails(book);
+      }}
       className="group w-full overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:rounded-xl"
     >
       <div className="flex h-full flex-col">

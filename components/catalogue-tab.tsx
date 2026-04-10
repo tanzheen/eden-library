@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeTrackBookClick } from "@/lib/book-clicks";
 import { requestBorrow } from "@/lib/book-orders";
+import { buildLoginPath, getCurrentPath } from "@/lib/auth-redirect";
 import { Book, GENRE_TAGS, DIFFICULTY_OPTIONS, PURPOSE_OPTIONS } from "@/lib/types";
 import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
 import { BookCard } from "./book-card";
@@ -102,6 +104,7 @@ function groupBooks(books: Book[], userId: string | null) {
 }
 
 export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
+  const router = useRouter();
   const PAGE_SIZE_OPTIONS = [8, 12, 16, 24];
   const topAnchorRef = useRef<HTMLDivElement | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
@@ -124,6 +127,10 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
   const [currentPage, setCurrentPage] = useState(1);
 
   const supabase = createClient();
+
+  const redirectToLogin = useCallback(() => {
+    router.push(buildLoginPath(getCurrentPath()));
+  }, [router]);
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
@@ -222,6 +229,11 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
   }, [currentPage, currentPageSafe]);
 
   const changePage = (nextPage: number) => {
+    if (!userId) {
+      redirectToLogin();
+      return;
+    }
+
     const boundedPage = Math.min(Math.max(nextPage, 1), totalPages);
 
     if (boundedPage === currentPageSafe) {
@@ -284,7 +296,7 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
 
   const handleBorrow = async (bookId: number) => {
     if (!userId || !userName) {
-      alert("Please sign in to borrow books");
+      redirectToLogin();
       return;
     }
 
@@ -312,6 +324,11 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
   };
 
   const clearFilters = () => {
+    if (!userId) {
+      redirectToLogin();
+      return;
+    }
+
     setSearchQuery("");
     setSelectedGenre("");
     setSelectedDifficulty("");
@@ -342,7 +359,13 @@ export function CatalogueTab({ userId, userName }: CatalogueTabProps) {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
+              onClick={() => {
+                if (!userId) {
+                  redirectToLogin();
+                  return;
+                }
+                setShowFilters(!showFilters);
+              }}
               className="gap-2"
             >
               <Filter className="h-4 w-4" />

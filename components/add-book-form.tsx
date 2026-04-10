@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { buildLoginPath, getCurrentPath } from "@/lib/auth-redirect";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -40,7 +41,7 @@ export function AddBookForm({ onBookAdded, userId, userName }: AddBookFormProps)
 
   const handleAddBookClick = () => {
     if (!userId) {
-      router.push("/auth/login");
+      router.push(buildLoginPath(getCurrentPath()));
       return;
     }
     setIsOpen(true);

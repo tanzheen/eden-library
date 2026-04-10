@@ -10,25 +10,28 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = useCallback(async () => {
     const supabase = createClient();
     setIsLoading(true);
     setError(null);
+    const nextPath = searchParams.get("next") || "/";
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
         },
       });
       if (error) throw error;
@@ -36,7 +39,11 @@ export function LoginForm({
       setError(error instanceof Error ? error.message : "An error occurred");
       setIsLoading(false);
     }
-  };
+  }, [searchParams]);
+
+  useEffect(() => {
+    handleGoogleLogin();
+  }, [handleGoogleLogin]);
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -44,7 +51,7 @@ export function LoginForm({
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Welcome to Eden Library</CardTitle>
           <CardDescription>
-            Sign in with your Google account to start borrowing and lending books
+            Redirecting you to Google sign-in.
           </CardDescription>
         </CardHeader>
         <CardContent>
