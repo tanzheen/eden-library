@@ -48,7 +48,7 @@ function normalizeOrderRecord(order: RawOrderRecord): OrderRecord {
     borrower_id: order.borrower_id,
     owner_name: order.owner_name,
     borrower_name: order.borrower_name,
-    note: order.note,
+    note: order.note ?? null,
     status: order.status,
     book: normalizedBook || undefined,
   };
