@@ -27,7 +27,7 @@ where the IDs match the books you actually recommended. Do not include this line
  * Generate an embedding for a query string using Google's gemini-embedding-001 model.
  * Returns a float array suitable for pgvector similarity search.
  */
-export async function embedQuery(query: string): Promise<number[]> {
+async function embedQuery(query: string): Promise<number[]> {
   const { embedding } = await embed({
     model: google.textEmbeddingModel("gemini-embedding-001"),
     value: query,
