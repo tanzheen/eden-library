@@ -36,15 +36,19 @@ export function MainContent({ userId, userName }: MainContentProps) {
         showManageTab
         showAssistantTab
       />
-      <div className="flex-1 w-full max-w-6xl mx-auto px-4 py-8">
-        {activeTab === "assistant" ? (
+      {activeTab === "assistant" ? (
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden w-full max-w-6xl mx-auto px-4 py-4">
           <AIAssistantTab userId={userId} userName={userName} />
-        ) : activeTab === "catalogue" ? (
-          <CatalogueTab userId={userId} userName={userName} />
-        ) : (
-          <ManageBooksTab userId={userId} userName={userName} />
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto px-4 py-8">
+          {activeTab === "catalogue" ? (
+            <CatalogueTab userId={userId} userName={userName} />
+          ) : (
+            <ManageBooksTab userId={userId} userName={userName} />
+          )}
+        </div>
+      )}
     </>
   );
 }

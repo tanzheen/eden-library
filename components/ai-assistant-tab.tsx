@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useState, useRef, useEffect, useMemo, FormEvent } from "react";
+import React, { useState, useRef, useEffect, useMemo, FormEvent } from "react";
 import { parseSelectedIds, stripSelectedIds } from "@/lib/books";
 import { Sparkles, Loader2, Send, BookOpen, User } from "lucide-react";
 import { Button } from "./ui/button";
@@ -24,6 +24,17 @@ interface ChatBook {
   purpose?: string | null;
   owner_name?: string | null;
   similarity: number;
+}
+
+// Render text with **bold** markers converted to <strong> elements
+function renderWithBold(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
 }
 
 // Helper to extract text content from message parts
@@ -87,7 +98,7 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-200px)] min-h-[500px] flex-col rounded-2xl border border-border bg-card shadow-sm">
+    <div className="flex h-full flex-col rounded-2xl border border-border bg-card shadow-sm">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border p-4">
         <Sparkles className="h-5 w-5 text-amber-500" />
@@ -166,8 +177,8 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
                         : "bg-muted text-foreground"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {displayText}
+                    <p className="whitespace-pre-wrap text-base leading-relaxed">
+                      {m.role === "assistant" ? renderWithBold(displayText) : displayText}
                     </p>
                   </div>
                   {m.role === "user" && (

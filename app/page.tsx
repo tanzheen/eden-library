@@ -15,7 +15,7 @@ async function AuthenticatedContent() {
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col bg-background">
+    <main className="h-dvh flex flex-col overflow-hidden bg-background">
       <Suspense fallback={<HeaderSkeleton />}>
         <HeaderBanner />
       </Suspense>

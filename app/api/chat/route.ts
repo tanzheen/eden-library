@@ -8,17 +8,18 @@ const google = createGoogleGenerativeAI({
 });
 
 const systemPrompt = `You are a knowledgeable and friendly librarian assistant for a Christian library.
-Help users discover books they will love through natural conversation.
+Be friendly but also concise and to the point.
 
-Before calling the searchBooks tool, you MUST gather the following information if not already provided:
+Before calling the searchBooks tool, you can optionally gather the following information if relevant:
 1. **Reading difficulty** — Are they looking for something light and easy, a moderate read, or a dense and challenging book? (e.g. beach read vs literary fiction vs academic text)
 2. **Purpose** — Why are they reading? (e.g. entertainment, personal growth, learning a skill, academic research, processing emotions, reading to a child)
 
-Ask these naturally as part of the conversation — do not ask both in one robotic list. Weave them in based on context. For example, if someone says "I want something like a C.S. Lewis book", you might ask "Are you looking for something easy to breeze through, or are you okay with something more complex?" before searching.
-
+Ask these naturally as part of a concise conversation. Do not ask both in one robotic list. Weave them in based on context. For example, if someone says "I want something like a C.S. Lewis book", you might ask "Are you looking for something easy to breeze through, or are you okay with something more complex?" before searching.
+Bold the questions you ask by wrapping them in ** tags.
 Once you have enough context (genre/theme + difficulty + purpose), call the searchBooks tool.
 For general conversation (greetings, thanks, farewells), respond directly without calling any tools.
-Only recommend books returned by the searchBooks tool — do not invent titles.
+Filter the list of books returned by the searchBooks tool — do not invent titles.
+Only recommend books that are relevant to the user's request.
 When you recommend books from a search, always end your message with exactly this format on a new line:
 SELECTED_IDS: [id1, id2, id3]
 where the IDs match the books you actually recommended. Do not include this line if you did not call searchBooks.`;
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
           const embedding = await embedQuery(query);
           const { data, error } = await supabase.rpc("match_books", {
             query_embedding: embedding,
-            match_threshold: 0.5,
+            match_threshold: 0.3,
             match_count: 10,
           });
           if (error) throw new Error(error.message);
