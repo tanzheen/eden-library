@@ -1,7 +1,6 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { streamText, tool, stepCountIs, convertToModelMessages } from "ai";
+import { streamText, tool, stepCountIs, convertToModelMessages, embed } from "ai";
 import { z } from "zod";
-import { embedQuery } from "@/lib/embed";
 import { createClient } from "@/lib/supabase/server";
 
 const google = createGoogleGenerativeAI({
@@ -23,6 +22,19 @@ Only recommend books returned by the searchBooks tool — do not invent titles.
 When you recommend books from a search, always end your message with exactly this format on a new line:
 SELECTED_IDS: [id1, id2, id3]
 where the IDs match the books you actually recommended. Do not include this line if you did not call searchBooks.`;
+
+/**
+ * Generate an embedding for a query string using Google's gemini-embedding-001 model.
+ * Returns a float array suitable for pgvector similarity search.
+ */
+export async function embedQuery(query: string): Promise<number[]> {
+  const { embedding } = await embed({
+    model: google.textEmbeddingModel("gemini-embedding-001"),
+    value: query,
+  });
+
+  return embedding;
+} 
 
 export async function POST(req: Request) {
   const { messages: uiMessages } = await req.json();
@@ -52,7 +64,7 @@ export async function POST(req: Request) {
           const embedding = await embedQuery(query);
           const { data, error } = await supabase.rpc("match_books", {
             query_embedding: embedding,
-            match_threshold: 0.5,
+            match_threshold: 0.7,
             match_count: 10,
           });
           if (error) throw new Error(error.message);
