@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import React, { useState, useRef, useEffect, useMemo, FormEvent } from "react";
 import { parseSelectedIds, stripSelectedIds } from "@/lib/books";
 import { Sparkles, Loader2, Send, BookOpen, User } from "lucide-react";
+import { BookCoverImage } from "./book-cover-image";
 import { Button } from "./ui/button";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage } from "ai";
@@ -199,10 +200,11 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
                     >
                       <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted">
                         {book.cover_url ? (
-                          <img
+                          <BookCoverImage
                             src={book.cover_url}
                             alt={`Cover of ${book.title}`}
-                            className="h-full w-full object-cover"
+                            className="object-cover"
+                            sizes="56px"
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800">
