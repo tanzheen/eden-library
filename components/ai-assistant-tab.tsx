@@ -69,6 +69,7 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
   const [signedCovers, setSignedCovers] = useState<Record<string, string>>({});
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const transport = useMemo(
     () => new DefaultChatTransport({ api: "/api/chat" }),
     []
@@ -145,6 +146,7 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
 
     const text = input.trim();
     setInput("");
+    inputRef.current?.blur();
     await sendMessage({ text });
   };
 
@@ -249,7 +251,7 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
 
                 {/* Book Cards */}
                 {selectedBooks.length > 0 && (
-                  <div className="ml-11 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="ml-0 sm:ml-11 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {selectedBooks.map((book) => {
                       const coverSrc = book.cover_url
                         ? (signedCovers[book.cover_url] ?? book.cover_url)
@@ -334,9 +336,10 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
         <div className="border-t border-border p-4">
           <form onSubmit={handleSubmit} className="flex gap-3">
             <input
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="What kind of book are you looking for?"
+              placeholder="Ask me for a book recommendation…"
               className="flex-1 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
             />
             <Button

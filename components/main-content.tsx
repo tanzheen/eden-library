@@ -37,7 +37,7 @@ export function MainContent({ userId, userName }: MainContentProps) {
         showAssistantTab
       />
       {activeTab === "assistant" ? (
-        <div className="flex flex-1 min-h-0 flex-col overflow-hidden w-full max-w-6xl mx-auto px-4 py-4">
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden w-full max-w-6xl mx-auto px-2 py-2 sm:px-4 sm:py-4">
           <AIAssistantTab userId={userId} userName={userName} />
         </div>
       ) : (

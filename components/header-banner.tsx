@@ -28,7 +28,7 @@ export async function HeaderBanner() {
 
   return (
     <header className="relative w-full">
-      <div className="relative h-48 md:h-64 w-full overflow-hidden">
+      <div className="relative h-24 sm:h-48 md:h-64 w-full overflow-hidden">
         <Image
           src="/header-wallpaper.webp"
           alt="Eden Library Banner"
@@ -38,10 +38,10 @@ export async function HeaderBanner() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-black/60" />
         <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight drop-shadow-lg">
+          <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight drop-shadow-lg">
             Eden Library
           </h1>
-          <p className="mt-2 text-lg md:text-xl text-white/90 drop-shadow">
+          <p className="mt-1 text-sm sm:text-lg md:text-xl text-white/90 drop-shadow">
             Knowing Jesus through books
           </p>
         </div>
