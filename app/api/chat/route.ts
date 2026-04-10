@@ -69,7 +69,23 @@ export async function POST(req: Request) {
             match_count: 10,
           });
           if (error) throw new Error(error.message);
-          return data;
+          if (!data || data.length === 0) return data;
+
+          // match_books may not return all columns (e.g. cover_url), so fetch
+          // the full book rows and merge cover_url + any other missing fields.
+          const ids = (data as { id: number }[]).map((b) => b.id);
+          const { data: fullBooks } = await supabase
+            .from("books")
+            .select("id, cover_url, description, isbn, status, owner_id")
+            .in("id", ids);
+
+          if (!fullBooks) return data;
+
+          const bookMap = new Map(fullBooks.map((b) => [b.id, b]));
+          return (data as { id: number }[]).map((b) => ({
+            ...b,
+            ...(bookMap.get(b.id) ?? {}),
+          }));
         },
       }),
     },
