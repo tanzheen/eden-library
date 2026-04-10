@@ -72,7 +72,7 @@ export async function POST(req: Request) {
         },
       }),
     },
-    stopWhen: stepCountIs(3),
+    stopWhen: stepCountIs(5),
     onFinish: async ({ text, toolCalls }) => {
       const usedSearch = toolCalls.some((t) => t.toolName === "searchBooks");
       const tag = deriveTag(usedSearch, text);
