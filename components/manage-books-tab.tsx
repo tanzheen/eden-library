@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { approveOrder, returnOrder } from "@/lib/book-orders";
 import { Book } from "@/lib/types";
 import { resolveBookCoverUrls } from "@/lib/resolve-book-covers";
@@ -75,9 +74,6 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
 
   const toggleSection = (key: keyof typeof expanded) =>
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const supabase = createClient();
-
   const fetchBooks = useCallback(async () => {
     if (!userId) {
       setOwnedBooks([]);
@@ -91,83 +87,64 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
 
     setLoading(true);
 
-    const [{ data: owned, error: ownedError }, { data: ownerOrders, error: ownerOrdersError }, { data: borrowerOrders, error: borrowerOrdersError }] =
-      await Promise.all([
-        supabase.from("books").select("*").eq("owner_id", userId).order("created_at", { ascending: false }),
-        supabase
-          .from("orders")
-          .select("id, book_id, owner_id, borrower_id, owner_name, borrower_name, note, status, book:books(*)")
-          .eq("owner_id", userId)
-          .in("status", ["requested", "borrowed"])
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("orders")
-          .select("id, book_id, owner_id, borrower_id, owner_name, borrower_name, note, status, book:books(*)")
-          .eq("borrower_id", userId)
-          .in("status", ["requested", "borrowed"])
-          .order("created_at", { ascending: false }),
-      ]);
+    try {
+      const response = await fetch("/api/manage-books", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const result = await response.json();
 
-    if (ownedError) {
-      console.error("Failed to fetch owned books:", ownedError);
-      setOwnedBooks([]);
-    } else {
-      setOwnedBooks(await resolveBookCoverUrls((owned || []) as Book[]));
-    }
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to fetch manage books data");
+      }
 
-    if (ownerOrdersError) {
-      console.error("Failed to fetch owner orders:", ownerOrdersError);
-      setRequestedOrders([]);
-      setBorrowedOutOrders([]);
-    } else {
+      const owned = (result.ownedBooks || []) as Book[];
+      const ownerOrders = (result.ownerOrders || []) as RawOrderRecord[];
+      const borrowerOrders = (result.borrowerOrders || []) as RawOrderRecord[];
+
+      setOwnedBooks(await resolveBookCoverUrls(owned));
+
       const resolvedOwnerOrders = await Promise.all(
-        ((ownerOrders || []) as RawOrderRecord[]).map(async (rawOrder) => {
+        ownerOrders.map(async (rawOrder) => {
           const order = normalizeOrderRecord(rawOrder);
 
           return {
-          ...order,
-          book: order.book
-            ? (await resolveBookCoverUrls([order.book]))[0]
-            : undefined,
+            ...order,
+            book: order.book ? (await resolveBookCoverUrls([order.book]))[0] : undefined,
           };
         })
       );
 
-      const pendingOrders = resolvedOwnerOrders.filter((order) => order.status === "requested");
-      const borrowedOrders = resolvedOwnerOrders.filter((order) => order.status === "borrowed");
-
-      setRequestedOrders(pendingOrders);
-      setBorrowedOutOrders(borrowedOrders);
-    }
-
-    if (borrowerOrdersError) {
-      console.error("Failed to fetch borrower orders:", borrowerOrdersError);
-      setRequestedByMeOrders([]);
-      setBorrowedByMeOrders([]);
-    } else {
       const resolvedBorrowerOrders = await Promise.all(
-        ((borrowerOrders || []) as RawOrderRecord[]).map(async (rawOrder) => {
+        borrowerOrders.map(async (rawOrder) => {
           const order = normalizeOrderRecord(rawOrder);
 
           return {
-          ...order,
-          book: order.book
-            ? (await resolveBookCoverUrls([order.book]))[0]
-            : undefined,
+            ...order,
+            book: order.book ? (await resolveBookCoverUrls([order.book]))[0] : undefined,
           };
         })
       );
 
+      setRequestedOrders(resolvedOwnerOrders.filter((order) => order.status === "requested"));
+      setBorrowedOutOrders(resolvedOwnerOrders.filter((order) => order.status === "borrowed"));
       setRequestedByMeOrders(
         resolvedBorrowerOrders.filter((order) => order.status === "requested")
       );
       setBorrowedByMeOrders(
         resolvedBorrowerOrders.filter((order) => order.status === "borrowed")
       );
+    } catch (error) {
+      console.error("Failed to fetch manage books data:", error);
+      setOwnedBooks([]);
+      setRequestedOrders([]);
+      setBorrowedOutOrders([]);
+      setRequestedByMeOrders([]);
+      setBorrowedByMeOrders([]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-  }, [supabase, userId]);
+  }, [userId]);
 
   useEffect(() => {
     fetchBooks();
