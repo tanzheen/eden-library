@@ -10,7 +10,7 @@
  */
 
 import { tavily } from "@tavily/core";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { generateBookMetadataPrompt } from "../lib/prompts/book-metadata-prompt";
 import * as fs from "fs";
 import * as path from "path";
@@ -145,6 +145,11 @@ async function testMetadataGeneration(bookName: string, authorName: string, forc
   const response = await genai.models.generateContent({
     model: metadataModel,
     contents: prompt,
+    config: {
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel.MINIMAL,
+      },
+    },
   });
   timings.push({ step: "Gemini Metadata", duration: Date.now() - step3Start });
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI , ThinkingLevel} from "@google/genai";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cosineSimilarity, parseEmbedding } from "@/lib/embedding-utils";
@@ -172,7 +172,12 @@ export async function POST(request: NextRequest) {
     const response = await genai.models.generateContent({
       model: "gemma-4-31b-it",
       contents: prompt,
-    });
+        config: {
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.MINIMAL,
+          },
+        },
+      });
 
     return NextResponse.json({
       answer:
