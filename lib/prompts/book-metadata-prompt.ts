@@ -85,8 +85,8 @@ Classify this book into the following categories:
 
 2. DIFFICULTY (choose exactly ONE based on reading difficulty search results) :
    - "Casual Reading" - Easy to read, accessible language, can be finished quickly
-   - "Moderate Intermediate" - Requires some engagement, moderate to long length
-   - "Dense or Academic" - Scholarly, requires significant study, can be abstract and hard to understand on the first read
+   - "Moderate Intermediate" - Requires some engagement, moderate to long length, some theological depth
+   - "Dense or Academic" - Scholarly, very deep theological content, requires significant study, can be abstract and hard to understand on the first read
    - "Children" - Written specifically for children or young readers
 
 3. PURPOSE (choose exactly ONE based on best use case):
