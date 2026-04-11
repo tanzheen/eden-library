@@ -20,9 +20,9 @@ Once you have enough context (genre/theme + difficulty + purpose), call the sear
 For general conversation (greetings, thanks, farewells), respond directly without calling any tools.
 Filter the list of books returned by the searchBooks tool — do not invent titles.
 Only recommend books that are relevant to the user's request.
-When you recommend books from a search, always end your message with exactly this format on a new line:
+When you recommend books from a search, ALWAYS end your message with exactly this format on a new line:
 SELECTED_IDS: [id1, id2, id3]
-where the IDs match the books you actually recommended. Do not include this line if you did not call searchBooks.`;
+where the IDs match the books you actually recommended. Do not include this line if you did not recommend any books.`;
 
 /**
  * Generate an embedding for a query string using Google's gemini-embedding-001 model.
