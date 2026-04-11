@@ -41,7 +41,7 @@ export function MainContent({ userId, userName }: MainContentProps) {
           <AIAssistantTab userId={userId} userName={userName} />
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto px-4 py-8">
+        <div id="main-scroll" className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto px-4 py-8">
           {activeTab === "catalogue" ? (
             <CatalogueTab userId={userId} userName={userName} />
           ) : (
