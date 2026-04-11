@@ -83,6 +83,21 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
 
   const isLoading = status === "streaming" || status === "submitted";
 
+  // Accumulate every book seen across all tool results so follow-up messages
+  // that reference IDs from a previous search still show cards.
+  const allBooksMap = useMemo(() => {
+    const map = new Map<number, ChatBook>();
+    for (const message of messages) {
+      const results = getSearchBooksResult(message);
+      if (results) {
+        for (const book of results) {
+          map.set(book.id, book);
+        }
+      }
+    }
+    return map;
+  }, [messages]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -208,10 +223,9 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
                 ? stripSelectedIds(messageText)
                 : messageText;
 
-            const searchResults = m.role === "assistant" ? getSearchBooksResult(m) : null;
-            const selectedBooks: ChatBook[] = searchResults
-              ? searchResults.filter((b) => selectedIds.includes(b.id))
-              : [];
+            const selectedBooks: ChatBook[] = selectedIds
+              .map((id) => allBooksMap.get(id))
+              .filter((b): b is ChatBook => b !== undefined);
 
             if (!displayText.trim() && selectedBooks.length === 0) {
               return null;
