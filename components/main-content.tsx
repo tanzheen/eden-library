@@ -26,6 +26,7 @@ export function MainContent({ userId, userName }: MainContentProps) {
     }
 
     setActiveTab(tab);
+    window.dispatchEvent(new CustomEvent("banner-tab-change", { detail: { tab } }));
   };
 
   return (

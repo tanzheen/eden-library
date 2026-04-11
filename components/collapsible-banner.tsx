@@ -4,18 +4,30 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 
 export function CollapsibleBanner() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [scrollCollapsed, setScrollCollapsed] = useState(false);
+  const [tabCollapsed, setTabCollapsed] = useState(false);
+  const collapsed = scrollCollapsed || tabCollapsed;
 
   useEffect(() => {
     const el = document.getElementById("main-scroll");
     if (!el) return;
 
     const handleScroll = () => {
-      setCollapsed(el.scrollTop > 10);
+      setScrollCollapsed(el.scrollTop > 10);
     };
 
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleTabChange = (e: Event) => {
+      const { tab } = (e as CustomEvent<{ tab: string }>).detail;
+      setTabCollapsed(tab !== "catalogue");
+    };
+
+    window.addEventListener("banner-tab-change", handleTabChange);
+    return () => window.removeEventListener("banner-tab-change", handleTabChange);
   }, []);
 
   return (
