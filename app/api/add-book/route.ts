@@ -4,6 +4,7 @@ import {
   isSupabaseStorageUrl,
   uploadImageToSupabase,
 } from "@/lib/book-cover-storage";
+import { isBlockedBookCoverUrl } from "@/lib/book-cover-sources";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -36,6 +37,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (cover_url && isBlockedBookCoverUrl(cover_url)) {
+    return NextResponse.json(
+      { error: "Please choose a cover image from a different source." },
+      { status: 400 }
+    );
+  }
+
   // Use admin client to bypass RLS
   let adminClient;
   try {
@@ -55,6 +63,9 @@ export async function POST(request: Request) {
     owner_name: user.user_metadata?.full_name || user.email,
     owner_id: user.id,
     cover_url: cover_url || null,
+    cover_url_downloaded: isSupabaseStorageUrl(cover_url || "")
+      ? cover_url
+      : null,
     status: true,
   };
 
@@ -140,7 +151,7 @@ export async function POST(request: Request) {
 
       const { data: updatedBook, error: coverUpdateError } = await adminClient
         .from("books")
-        .update({ cover_url: uploadedCoverUrl })
+        .update({ cover_url_downloaded: uploadedCoverUrl })
         .eq("id", insertedBook.id)
         .select()
         .single();
@@ -152,6 +163,19 @@ export async function POST(request: Request) {
       }
     } catch (coverUploadError) {
       console.error("Failed to upload chosen cover to Supabase Storage:", coverUploadError);
+    }
+  } else if (insertedBook.cover_url && isSupabaseStorageUrl(insertedBook.cover_url)) {
+    const { data: updatedBook, error: coverUpdateError } = await adminClient
+      .from("books")
+      .update({ cover_url_downloaded: insertedBook.cover_url })
+      .eq("id", insertedBook.id)
+      .select()
+      .single();
+
+    if (coverUpdateError) {
+      console.error("Failed to sync downloaded cover URL:", coverUpdateError);
+    } else if (updatedBook) {
+      finalBook = updatedBook;
     }
   }
 

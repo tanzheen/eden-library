@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { tavily } from "@tavily/core";
+import {
+  isBlockedBookCoverUrl,
+  normalizeBookCoverUrl,
+} from "@/lib/book-cover-sources";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -37,8 +41,9 @@ export async function GET(request: Request) {
     const images = (result.images || [])
       .map((image) => {
         const raw = typeof image === "string" ? image : (image as { src?: string; url?: string; host?: string; title?: string }).src || (image as { url?: string }).url;
-        const imageUrl = raw?.replace("http://", "https://").replace("&edge=curl", "");
+        const imageUrl = raw ? normalizeBookCoverUrl(raw) : null;
         if (!imageUrl) return null;
+        if (isBlockedBookCoverUrl(imageUrl)) return null;
 
         const record = typeof image === "object" ? image as { host?: string; title?: string } : null;
         return {

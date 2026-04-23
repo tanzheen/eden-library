@@ -1,4 +1,5 @@
 import { Book } from "@/lib/types";
+import { getPreferredBookCoverUrl } from "@/lib/book-cover-url";
 
 const COVER_URL_CACHE_KEY = "eden-library-cover-url-cache";
 const COVER_URL_TTL_MS = 45 * 60 * 1000;
@@ -92,7 +93,7 @@ export async function resolveBookCoverUrls<T extends Book>(books: T[]) {
   const urls = [
     ...new Set(
       books
-        .map((book) => book.cover_url)
+        .map((book) => getPreferredBookCoverUrl(book))
         .filter((url): url is string => Boolean(url))
         .filter((url) => url.includes("/storage/v1/object/public/"))
     ),
@@ -101,7 +102,7 @@ export async function resolveBookCoverUrls<T extends Book>(books: T[]) {
   if (urls.length === 0) {
     preloadCoverImages(
       books
-        .map((book) => book.cover_url)
+        .map((book) => getPreferredBookCoverUrl(book))
         .filter((url): url is string => Boolean(url))
     );
     return books;
@@ -146,6 +147,10 @@ export async function resolveBookCoverUrls<T extends Book>(books: T[]) {
 
     const resolvedBooks = books.map((book) => ({
       ...book,
+      cover_url_downloaded:
+        book.cover_url_downloaded && signedUrls[book.cover_url_downloaded]
+          ? signedUrls[book.cover_url_downloaded]
+          : book.cover_url_downloaded,
       cover_url:
         book.cover_url && signedUrls[book.cover_url]
           ? signedUrls[book.cover_url]
@@ -154,7 +159,7 @@ export async function resolveBookCoverUrls<T extends Book>(books: T[]) {
 
     preloadCoverImages(
       resolvedBooks
-        .map((book) => book.cover_url)
+        .map((book) => getPreferredBookCoverUrl(book))
         .filter((url): url is string => Boolean(url))
     );
 

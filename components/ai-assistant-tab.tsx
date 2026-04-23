@@ -11,6 +11,8 @@ import type { UIMessage } from "ai";
 import type { Book } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 import { requestBorrow } from "@/lib/book-orders";
+import { getPreferredBookCoverUrl } from "@/lib/book-cover-url";
+import { BookCoverImage } from "./book-cover-image";
 
 interface AIAssistantTabProps {
   userId: string | null;
@@ -23,6 +25,7 @@ interface ChatBook {
   author: string;
   description: string | null;
   cover_url: string | null;
+  cover_url_downloaded?: string | null;
   genre_tag?: string | null;
   difficulty?: string | null;
   purpose?: string | null;
@@ -111,6 +114,12 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
         for (const book of results) {
           if (book.cover_url && !signedCovers[book.cover_url]) {
             urlsToSign.push(book.cover_url);
+          }
+          if (
+            book.cover_url_downloaded &&
+            !signedCovers[book.cover_url_downloaded]
+          ) {
+            urlsToSign.push(book.cover_url_downloaded);
           }
         }
       }
@@ -267,9 +276,21 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
                 {selectedBooks.length > 0 && (
                   <div className="ml-0 sm:ml-11 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {selectedBooks.map((book) => {
-                      const coverSrc = book.cover_url
-                        ? (signedCovers[book.cover_url] ?? book.cover_url)
-                        : null;
+                      const displayBook = {
+                        ...book,
+                        cover_url: book.cover_url
+                          ? (signedCovers[book.cover_url] ?? book.cover_url)
+                          : null,
+                        cover_url_downloaded: book.cover_url_downloaded
+                          ? (signedCovers[book.cover_url_downloaded] ??
+                            book.cover_url_downloaded)
+                          : null,
+                      };
+                      const coverSrc = getPreferredBookCoverUrl(displayBook);
+                      const fallbackSrc =
+                        displayBook.cover_url_downloaded && displayBook.cover_url
+                          ? displayBook.cover_url
+                          : null;
 
                       return (
                         <button
@@ -280,10 +301,11 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
                         >
                           <div className="h-20 w-14 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted">
                             {coverSrc ? (
-                              <img
+                              <BookCoverImage
                                 src={coverSrc}
+                                fallbackSrc={fallbackSrc}
                                 alt={`Cover of ${book.title}`}
-                                className="h-full w-full object-cover"
+                                className="object-cover"
                               />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800">

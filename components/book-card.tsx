@@ -5,6 +5,7 @@ import { User, BookOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { buildLoginPath, getCurrentPath } from "@/lib/auth-redirect";
 import { BookCoverImage } from "./book-cover-image";
+import { getFallbackBookCoverUrl, getPreferredBookCoverUrl } from "@/lib/book-cover-url";
 
 interface BookCardProps {
   book: Book;
@@ -27,6 +28,8 @@ export function BookCard({
   const tags = [book.genre_tag, book.difficulty, book.purpose].filter(
     Boolean
   ) as string[];
+  const coverSrc = getPreferredBookCoverUrl(book);
+  const coverFallbackSrc = getFallbackBookCoverUrl(book);
   const resolvedOwnerLabel = ownerLabel || book.owner_name || "Unknown Owner";
   const resolvedStatusLabel =
     statusLabel || (isOwnedByViewer ? "Owned" : isAvailable ? "Available" : "Borrowed");
@@ -46,9 +49,10 @@ export function BookCard({
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-center bg-muted px-2 py-3 sm:px-4 sm:py-5">
           <div className="relative aspect-[2/3] w-full max-w-[92px] overflow-hidden rounded-md border border-border/60 bg-background shadow-sm sm:max-w-[140px]">
-            {book.cover_url ? (
+            {coverSrc ? (
               <BookCoverImage
-                src={book.cover_url}
+                src={coverSrc}
+                fallbackSrc={coverFallbackSrc}
                 alt={`Cover of ${book.title}`}
                 className="object-contain"
                 sizes="(max-width: 640px) 92px, 140px"

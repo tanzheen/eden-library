@@ -4,6 +4,7 @@ import { Book } from "@/lib/types";
 import { Button } from "./ui/button";
 import { X, User, BookOpen } from "lucide-react";
 import { BookCoverImage } from "./book-cover-image";
+import { getFallbackBookCoverUrl, getPreferredBookCoverUrl } from "@/lib/book-cover-url";
 
 interface BookDetailsModalProps {
   book: Book;
@@ -29,6 +30,8 @@ export function BookDetailsModal({
   const tags = [book.genre_tag, book.difficulty, book.purpose].filter(
     Boolean
   ) as string[];
+  const coverSrc = getPreferredBookCoverUrl(book);
+  const coverFallbackSrc = getFallbackBookCoverUrl(book);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -48,9 +51,10 @@ export function BookDetailsModal({
           <div className="flex flex-col gap-8 md:flex-row md:items-start">
             <div className="mx-auto w-full max-w-[180px] shrink-0 md:mx-0 md:max-w-[220px]">
               <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-border bg-muted shadow-md">
-                {book.cover_url ? (
+                {coverSrc ? (
                   <BookCoverImage
-                    src={book.cover_url}
+                    src={coverSrc}
+                    fallbackSrc={coverFallbackSrc}
                     alt={`Cover of ${book.title}`}
                     className="object-contain"
                     sizes="(max-width: 768px) 180px, 220px"

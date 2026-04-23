@@ -5,6 +5,7 @@ export interface Book {
   author: string;
   description: string | null;
   cover_url: string | null;
+  cover_url_downloaded?: string | null;
   genre_tag: string | null;
   difficulty: string | null;
   purpose: string | null;

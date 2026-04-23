@@ -9,6 +9,7 @@ interface BookCoverImageProps {
   alt: string;
   className: string;
   sizes?: string;
+  fallbackSrc?: string | null;
 }
 
 export function BookCoverImage({
@@ -16,8 +17,10 @@ export function BookCoverImage({
   alt,
   className,
   sizes,
+  fallbackSrc,
 }: BookCoverImageProps) {
   const [resolvedSrc, setResolvedSrc] = useState(src);
+  const [activeFallbackSrc, setActiveFallbackSrc] = useState(fallbackSrc || null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,9 +28,11 @@ export function BookCoverImage({
 
     const resolveSrc = async () => {
       setResolvedSrc(src);
+      setActiveFallbackSrc(fallbackSrc || null);
       setLoading(true);
 
       if (!src.includes("/storage/v1/object/public/")) {
+        setLoading(false);
         return;
       }
 
@@ -50,7 +55,7 @@ export function BookCoverImage({
     return () => {
       cancelled = true;
     };
-  }, [src]);
+  }, [src, fallbackSrc]);
 
   return (
     <>
@@ -66,7 +71,16 @@ export function BookCoverImage({
         className={className}
         sizes={sizes}
         onLoad={() => setLoading(false)}
-        onError={() => setLoading(false)}
+        onError={() => {
+          if (activeFallbackSrc && activeFallbackSrc !== resolvedSrc) {
+            setResolvedSrc(activeFallbackSrc);
+            setActiveFallbackSrc(null);
+            setLoading(true);
+            return;
+          }
+
+          setLoading(false);
+        }}
       />
     </>
   );
