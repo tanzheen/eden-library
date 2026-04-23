@@ -5,7 +5,7 @@ import {
   uploadImageToSupabase,
 } from "@/lib/book-cover-storage";
 import { isBlockedBookCoverUrl } from "@/lib/book-cover-sources";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   // Use regular client for auth check
@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
+  const sessionToken = session?.access_token;
 
   if (!user) {
     return NextResponse.json(
@@ -142,41 +143,43 @@ export async function POST(request: Request) {
     insertedBook.cover_url &&
     !isSupabaseStorageUrl(insertedBook.cover_url)
   ) {
-    try {
-      const uploadedCoverUrl = await uploadImageToSupabase(
-        insertedBook.cover_url,
-        insertedBook.id,
-        session?.access_token
-      );
+    after(async () => {
+      try {
+        const uploadedCoverUrl = await uploadImageToSupabase(
+          insertedBook.cover_url,
+          insertedBook.id,
+          sessionToken
+        );
 
-      const { data: updatedBook, error: coverUpdateError } = await adminClient
+        const { error: coverUpdateError } = await adminClient
+          .from("books")
+          .update({ cover_url_downloaded: uploadedCoverUrl })
+          .eq("id", insertedBook.id);
+
+        if (coverUpdateError) {
+          console.error(
+            "Failed to update book with Supabase downloaded cover URL:",
+            coverUpdateError
+          );
+        }
+      } catch (coverUploadError) {
+        console.error(
+          "Failed to upload chosen cover to Supabase Storage:",
+          coverUploadError
+        );
+      }
+    });
+  } else if (insertedBook.cover_url && isSupabaseStorageUrl(insertedBook.cover_url)) {
+    after(async () => {
+      const { error: coverUpdateError } = await adminClient
         .from("books")
-        .update({ cover_url_downloaded: uploadedCoverUrl })
-        .eq("id", insertedBook.id)
-        .select()
-        .single();
+        .update({ cover_url_downloaded: insertedBook.cover_url })
+        .eq("id", insertedBook.id);
 
       if (coverUpdateError) {
-        console.error("Failed to update book with Supabase cover URL:", coverUpdateError);
-      } else if (updatedBook) {
-        finalBook = updatedBook;
+        console.error("Failed to sync downloaded cover URL:", coverUpdateError);
       }
-    } catch (coverUploadError) {
-      console.error("Failed to upload chosen cover to Supabase Storage:", coverUploadError);
-    }
-  } else if (insertedBook.cover_url && isSupabaseStorageUrl(insertedBook.cover_url)) {
-    const { data: updatedBook, error: coverUpdateError } = await adminClient
-      .from("books")
-      .update({ cover_url_downloaded: insertedBook.cover_url })
-      .eq("id", insertedBook.id)
-      .select()
-      .single();
-
-    if (coverUpdateError) {
-      console.error("Failed to sync downloaded cover URL:", coverUpdateError);
-    } else if (updatedBook) {
-      finalBook = updatedBook;
-    }
+    });
   }
 
   // Trigger metadata generation for new books (runs in background)
