@@ -113,7 +113,9 @@ async function searchTavilyCover(
     const rawUrl =
       typeof image === "string"
         ? image
-        : image.src || image.url || null;
+        : ((image as { src?: string; url?: string }).src ||
+          (image as { src?: string; url?: string }).url ||
+          null);
 
     if (!rawUrl) {
       continue;
