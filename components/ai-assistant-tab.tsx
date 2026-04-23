@@ -299,13 +299,14 @@ export function AIAssistantTab({ userId, userName }: AIAssistantTabProps) {
                           onClick={() => handleBookClick(book.id)}
                           className="flex gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          <div className="h-20 w-14 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted">
+                          <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted">
                             {coverSrc ? (
                               <BookCoverImage
                                 src={coverSrc}
                                 fallbackSrc={fallbackSrc}
                                 alt={`Cover of ${book.title}`}
                                 className="object-cover"
+                                sizes="56px"
                               />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800">
