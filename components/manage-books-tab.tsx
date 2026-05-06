@@ -469,7 +469,7 @@ export function ManageBooksTab({ userId, userName }: ManageBooksTabProps) {
         sectionKey: "requestedByMe",
         icon: <Inbox className="h-5 w-5 text-amber-500" />,
         title: "Requested By You",
-        description: "Books you requested that are still waiting for the owner&apos;s approval.",
+        description: "Books you requested that are still waiting for the owner's approval.",
         emptyState: "You do not have any outgoing requests awaiting approval.",
         gridClassName: "grid gap-4 md:grid-cols-2",
         content: requestedByMeOrders.map((order) => (
